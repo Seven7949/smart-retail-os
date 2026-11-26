@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "features": [
+    "tenure_days",
+    "utilisation",
+    "days_since_payment",
+    "avg_days_to_repay",
+    "late_payments",
+    "pay_ratio_90d",
+    "reminders_ignored"
+  ],
+  "mean": [
+    456.735556,
+    0.398838,
+    34.862222,
+    20.506667,
+    1.987778,
+    0.818152,
+    0.826667
+  ],
+  "scale": [
+    247.832396,
+    0.160928,
+    28.223098,
+    8.260277,
+    1.788502,
+    0.133608,
+    1.029002
+  ],
+  "coef": [
+    -0.179819,
+    0.363968,
+    0.578823,
+    0.230307,
+    0.152752,
+    -0.451585,
+    -0.002218
+  ],
+  "intercept": -0.506493,
+  "bands": {
+    "low": 0.35,
+    "high": 0.65
+  },
+  "note": "Decision support only. Trained on synthetic payment behaviour; no demographic features."
+}

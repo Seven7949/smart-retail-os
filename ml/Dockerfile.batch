@@ -1,0 +1,9 @@
+# ml-batch Lambda container (x86_64). Build context: ml/ (deploy workflow copies ../spec into ml/spec).
+FROM public.ecr.aws/lambda/python:3.12
+COPY requirements-batch.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements-batch.txt
+COPY sros_ml ${LAMBDA_TASK_ROOT}/sros_ml
+COPY batch ${LAMBDA_TASK_ROOT}/batch
+COPY spec ${LAMBDA_TASK_ROOT}/spec
+ENV SROS_SPEC_DIR=${LAMBDA_TASK_ROOT}/spec
+CMD ["batch.handler.handler"]

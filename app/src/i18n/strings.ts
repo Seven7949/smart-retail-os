@@ -1,0 +1,85 @@
+/** English + Hindi UI strings. Keys are shared; missing Hindi falls back to English. */
+const en = {
+  appName: 'Dukaan AI',
+  tagline: 'Billing, stock and khata that think ahead',
+  home: 'Home', bill: 'Bill', stock: 'Stock', insights: 'Insights', khata: 'Khata', settings: 'Settings',
+  goodMorning: 'Good morning', goodAfternoon: 'Good afternoon', goodEvening: 'Good evening',
+  today: 'Today', sales: 'Sales', bills: 'Bills', avgBill: 'Avg bill', next7: 'Next 7 days (forecast)',
+  newBill: 'New bill', voiceBill: 'Voice bill', scanInvoice: 'Scan invoice', addUdhaar: 'Add udhaar',
+  reorderToday: 'Reorder today', seeAll: 'See all', allGood: 'All stocked up. Nothing to reorder today.',
+  festivalAhead: 'in {n} days', festivalToday: 'is today!', stockUp: 'Stock up on',
+  ledgerVerified: 'Tamper-proof ledger', ledgerBroken: 'Ledger check failed', billsSecured: '{n} bills secured',
+  signedCloud: '{n} signed in cloud',
+  searchItems: 'Search items…', cart: 'Cart', emptyCart: 'Tap items or use voice to start a bill',
+  total: 'Total', cash: 'Cash', upi: 'UPI', udhaar: 'Udhaar', chooseCustomer: 'Choose customer', saveBill: 'Save bill',
+  billSaved: 'Bill saved', shareReceipt: 'Share receipt', done: 'Done', scanToPay: 'Scan to pay with any UPI app',
+  listening: 'Listening… speak naturally', tapToSpeak: 'Tap the mic and say your order',
+  voiceExample: 'e.g. "do kilo cheeni aur teen Maggi"', typeInstead: 'Or type it here', addToBill: 'Add to bill',
+  didntCatch: "Couldn't match: {w}", askCloud: 'Ask AI (Bedrock)', heard: 'Heard',
+  lowStock: 'Low stock', reorder: 'Reorder', all: 'All', daysCover: '{n} days left', inStock: 'in stock',
+  editItem: 'Edit item', addItem: 'Add item', name: 'Name', price: 'Selling price (₹)', cost: 'Cost price (₹)',
+  stockQty: 'Stock', packSize: 'Supplier pack size', leadTime: 'Delivery days', save: 'Save', cancel: 'Cancel',
+  forecast: 'Forecast', together: 'Bought together', customers: 'Customers', accuracy: 'Accuracy',
+  vsBaseline: 'vs {n} for "same day last week"', next14: 'Next 14 days', last28: 'Last 28 days',
+  orderPacks: 'Order {n} packs', festivalDemand: 'Festival demand', belowReorder: 'Below reorder point',
+  sendOrder: 'Send order to supplier', alsoBuy: 'also buy', comboTip: 'Keep these together on the shelf or offer a combo.',
+  segments: 'Customer groups', outstanding: 'Total outstanding', addCustomer: 'Add customer', phone: 'Phone (optional)',
+  creditLimit: 'Credit limit (₹, optional)', risk: 'Risk', low: 'Low', medium: 'Medium', high: 'High',
+  giveCredit: 'Give credit', receivePayment: 'Receive payment', amount: 'Amount (₹)', sendReminder: 'Send WhatsApp reminder',
+  noCustomers: 'No customers yet. Add one to start a khata.', settled: 'All settled',
+  language: 'Language', shopName: 'Shop name', upiId: 'UPI ID (for QR on bills)', cloud: 'Cloud sync (AWS)',
+  signIn: 'Sign in', signUp: 'Create account', signOut: 'Sign out', email: 'Email', password: 'Password',
+  verifyCode: 'Verification code', confirm: 'Confirm', syncNow: 'Sync now', lastSync: 'Last sync',
+  never: 'never', verifyLedger: 'Verify ledger', resetData: 'Reset all data', apiUrl: 'API URL', region: 'Region',
+  userPool: 'User pool ID', clientId: 'App client ID', dailyDigest: 'Email me a daily digest',
+  demoShop: 'Explore the demo shop', startShop: 'Start my own shop', welcomeBody: '90 days of a real-looking kirana, ready to explore. Works fully offline.',
+  scanTitle: 'Scan supplier invoice', takePhoto: 'Take photo', fromGallery: 'From gallery', sampleInvoice: 'Use sample invoice',
+  addToStock: 'Add to stock', matched: 'Matched', notMatched: 'Not matched. Tap to choose.', reading: 'Reading invoice with Textract…',
+  offlineScan: 'Sign in to the cloud to read real invoices. You can try the sample invoice offline.',
+  computing: 'Crunching your numbers…', insightsSource: 'Computed on this phone', cloudSource: 'AWS nightly model',
+};
+
+export type StringKey = keyof typeof en;
+
+const hi: Partial<Record<StringKey, string>> = {
+  tagline: 'बिलिंग, स्टॉक और खाता जो आगे की सोचे',
+  home: 'होम', bill: 'बिल', stock: 'स्टॉक', insights: 'सुझाव', khata: 'खाता', settings: 'सेटिंग्स',
+  goodMorning: 'सुप्रभात', goodAfternoon: 'नमस्ते', goodEvening: 'शुभ संध्या',
+  today: 'आज', sales: 'बिक्री', bills: 'बिल', avgBill: 'औसत बिल', next7: 'अगले 7 दिन (अनुमान)',
+  newBill: 'नया बिल', voiceBill: 'बोलकर बिल', scanInvoice: 'बिल स्कैन', addUdhaar: 'उधार जोड़ें',
+  reorderToday: 'आज मंगाएँ', seeAll: 'सब देखें', allGood: 'स्टॉक पूरा है। आज कुछ मंगाने की ज़रूरत नहीं।',
+  festivalAhead: '{n} दिन में', festivalToday: 'आज है!', stockUp: 'इनका स्टॉक बढ़ाएँ',
+  ledgerVerified: 'छेड़छाड़-रहित खाता', ledgerBroken: 'खाता जाँच विफल', billsSecured: '{n} बिल सुरक्षित',
+  signedCloud: '{n} क्लाउड में हस्ताक्षरित',
+  searchItems: 'सामान खोजें…', cart: 'कार्ट', emptyCart: 'सामान पर टैप करें या बोलकर बिल बनाएँ',
+  total: 'कुल', cash: 'नकद', upi: 'UPI', udhaar: 'उधार', chooseCustomer: 'ग्राहक चुनें', saveBill: 'बिल सेव करें',
+  billSaved: 'बिल सेव हो गया', shareReceipt: 'रसीद भेजें', done: 'ठीक है', scanToPay: 'किसी भी UPI ऐप से स्कैन करें',
+  listening: 'सुन रहे हैं… आराम से बोलिए', tapToSpeak: 'माइक दबाइए और सामान बोलिए',
+  voiceExample: 'जैसे "दो किलो चीनी और तीन मैगी"', typeInstead: 'या यहाँ लिखें', addToBill: 'बिल में जोड़ें',
+  didntCatch: 'समझ नहीं आया: {w}', askCloud: 'AI से पूछें (Bedrock)', heard: 'सुना',
+  lowStock: 'कम स्टॉक', reorder: 'मंगाना है', all: 'सब', daysCover: '{n} दिन का बचा', inStock: 'स्टॉक में',
+  editItem: 'सामान बदलें', addItem: 'नया सामान', name: 'नाम', price: 'बिक्री दाम (₹)', cost: 'खरीद दाम (₹)',
+  stockQty: 'स्टॉक', packSize: 'सप्लायर पैक', leadTime: 'डिलीवरी दिन', save: 'सेव', cancel: 'रद्द करें',
+  forecast: 'अनुमान', together: 'साथ में बिकते', customers: 'ग्राहक', accuracy: 'सटीकता',
+  next14: 'अगले 14 दिन', last28: 'पिछले 28 दिन', orderPacks: '{n} पैक मंगाएँ', festivalDemand: 'त्योहार की माँग',
+  belowReorder: 'स्टॉक कम', sendOrder: 'सप्लायर को ऑर्डर भेजें', alsoBuy: 'भी खरीदते हैं',
+  comboTip: 'इन्हें शेल्फ़ पर साथ रखें या कॉम्बो ऑफ़र दें।', segments: 'ग्राहक समूह', outstanding: 'कुल बकाया',
+  addCustomer: 'ग्राहक जोड़ें', phone: 'फ़ोन (वैकल्पिक)', creditLimit: 'उधार सीमा (₹)', risk: 'जोखिम', low: 'कम',
+  medium: 'मध्यम', high: 'ज़्यादा', giveCredit: 'उधार दें', receivePayment: 'भुगतान लें', amount: 'रकम (₹)',
+  sendReminder: 'WhatsApp याद दिलाएँ', noCustomers: 'अभी कोई ग्राहक नहीं।', settled: 'सब चुकता',
+  language: 'भाषा', shopName: 'दुकान का नाम', upiId: 'UPI ID', cloud: 'क्लाउड सिंक (AWS)', signIn: 'साइन इन',
+  signUp: 'खाता बनाएँ', signOut: 'साइन आउट', syncNow: 'अभी सिंक करें', lastSync: 'पिछला सिंक', never: 'कभी नहीं',
+  verifyLedger: 'खाता जाँचें', resetData: 'सारा डेटा मिटाएँ', demoShop: 'डेमो दुकान देखें', startShop: 'अपनी दुकान शुरू करें',
+  welcomeBody: '90 दिनों की असली जैसी दुकान, देखने के लिए तैयार। बिना इंटरनेट भी चलता है।',
+  scanTitle: 'सप्लायर बिल स्कैन', takePhoto: 'फ़ोटो लें', fromGallery: 'गैलरी से', sampleInvoice: 'नमूना बिल',
+  addToStock: 'स्टॉक में जोड़ें', matched: 'मिला', notMatched: 'नहीं मिला, चुनें', reading: 'Textract बिल पढ़ रहा है…',
+  computing: 'हिसाब लगा रहे हैं…', insightsSource: 'इसी फ़ोन पर गणना', cloudSource: 'AWS रात्रि मॉडल',
+};
+
+export const STRINGS = { en, hi };
+
+export function translate(lang: 'en' | 'hi', key: StringKey, vars?: Record<string, string | number>): string {
+  let s = (lang === 'hi' ? hi[key] : undefined) ?? en[key];
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v));
+  return s;
+}

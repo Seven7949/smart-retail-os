@@ -1,0 +1,22 @@
+# deps / builds
+node_modules/
+ledger/target/
+infra/cdk.out/
+infra/cdk-outputs.json
+app/android/
+app/ios/
+app/dist/
+app/.expo/
+app/coverage/
+**/__pycache__/
+**/.pytest_cache/
+**/.coverage
+coverage/
+ml/spec/
+ml/model/
+ml/output/
+# secrets
+.env
+.env.*
+*.keystore
+*.jks

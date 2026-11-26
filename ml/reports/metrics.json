@@ -1,0 +1,681 @@
+{
+  "config": {
+    "start": "2025-01-01",
+    "end": "2026-11-15",
+    "seed": 42
+  },
+  "forecasting": {
+    "results": [
+      {
+        "model": "Seasonal naive (same day last week)",
+        "MAE": 4.497767857142857,
+        "RMSE": 6.389409485345933,
+        "WAPE": 0.4048460982078277,
+        "MASE": 1.261513264984148,
+        "Bias": 0.011854054488467412,
+        "festival_wape": 0.3670306102554104,
+        "cv_mae": null
+      },
+      {
+        "model": "Moving average (28 days)",
+        "MAE": 3.2923469387755104,
+        "RMSE": 4.796217034366089,
+        "WAPE": 0.2963456217494633,
+        "MASE": 0.9234223437297648,
+        "Bias": -0.026222431430178758,
+        "festival_wape": 0.30830292733197784,
+        "cv_mae": null
+      },
+      {
+        "model": "Ridge",
+        "MAE": 2.912390304673549,
+        "RMSE": 4.153773431781641,
+        "WAPE": 0.26214555502968534,
+        "MASE": 0.8168538525887316,
+        "Bias": 0.032491304746106925,
+        "festival_wape": 0.25703573105309696,
+        "cv_mae": 2.644839709469868
+      },
+      {
+        "model": "RandomForest",
+        "MAE": 2.7373163530525857,
+        "RMSE": 3.8493396412746907,
+        "WAPE": 0.24638707027396095,
+        "MASE": 0.7677499149605822,
+        "Bias": 0.018774822574563796,
+        "festival_wape": 0.23179140473659515,
+        "cv_mae": 2.6161749361746067
+      },
+      {
+        "model": "HistGradientBoosting",
+        "MAE": 2.6591216623317098,
+        "RMSE": 3.7259637515072175,
+        "WAPE": 0.23934873115900626,
+        "MASE": 0.745818227348234,
+        "Bias": 0.001881006015225052,
+        "festival_wape": 0.22388094436462538,
+        "cv_mae": 2.566216190814275
+      },
+      {
+        "model": "LightGBM",
+        "MAE": 2.6237887503775816,
+        "RMSE": 3.664417734395938,
+        "WAPE": 0.2361683999375465,
+        "MASE": 0.7359082145293501,
+        "Bias": 0.001490560493979037,
+        "festival_wape": 0.21928367878376176,
+        "cv_mae": 2.535682170534251
+      },
+      {
+        "model": "LightGBM (no festival features)",
+        "MAE": 3.113365321347543,
+        "RMSE": 4.522102478158516,
+        "WAPE": 0.2802354062452181,
+        "MASE": 0.873222401948615,
+        "Bias": -0.0323666074210207,
+        "festival_wape": 0.3009630715173562,
+        "cv_mae": 2.6364350357284665
+      }
+    ],
+    "best": "LightGBM",
+    "festival_gain_pct": 27.13934049177328,
+    "importance": {
+      "rmean_28": 0.7658,
+      "ewm_14": 0.1245,
+      "same_dow_mean_4": 0.0276,
+      "fest_x_lift": 0.0218,
+      "festival_lift": 0.0125,
+      "dow": 0.0095,
+      "dom": 0.0087,
+      "promo": 0.0048,
+      "fest_intensity": 0.0047,
+      "rmean_7": 0.0038,
+      "rstd_28": 0.0032,
+      "cat_code": 0.0024
+    }
+  },
+  "replenishment": [
+    {
+      "policy": "Shopkeeper heuristic",
+      "total_cost_rs": 42514.58000000001,
+      "fill_rate": 0.9538294623483082,
+      "stockout_days": 141,
+      "waste_units": 148,
+      "orders": 535
+    },
+    {
+      "policy": "Forecast-driven (s,S)",
+      "total_cost_rs": 31463.820100000008,
+      "fill_rate": 0.992726834364703,
+      "stockout_days": 32,
+      "waste_units": 301,
+      "orders": 317
+    },
+    {
+      "policy": "Q-learning",
+      "total_cost_rs": 104280.64710000003,
+      "fill_rate": 0.9259021136381902,
+      "stockout_days": 180,
+      "waste_units": 448,
+      "orders": 1104
+    }
+  ],
+  "basket": {
+    "transactions": 26070,
+    "items": 40,
+    "min_support": 0.01,
+    "itemsets": 143,
+    "identical_itemsets": true,
+    "apriori_seconds": 0.03827861500030849,
+    "fpgrowth_seconds": 0.06793081400019219,
+    "speedup": 0.5634941309580097,
+    "planted_precision_top20": 1.0,
+    "support_sweep": [
+      {
+        "min_support": 0.02,
+        "itemsets": 118,
+        "apriori_s": 0.02206646800004819,
+        "fpgrowth_s": 0.06797527399976389
+      },
+      {
+        "min_support": 0.01,
+        "itemsets": 143,
+        "apriori_s": 0.025410835000002407,
+        "fpgrowth_s": 0.2533149329997286
+      },
+      {
+        "min_support": 0.005,
+        "itemsets": 221,
+        "apriori_s": 0.04842000500002541,
+        "fpgrowth_s": 0.1176191189997553
+      },
+      {
+        "min_support": 0.002,
+        "itemsets": 592,
+        "apriori_s": 0.1846555129995977,
+        "fpgrowth_s": 0.131610193999677
+      }
+    ],
+    "top_rules": [
+      {
+        "if": [
+          "agarbatti",
+          "matchbox"
+        ],
+        "then": [
+          "ghee-amul-500"
+        ],
+        "support": 0.014,
+        "confidence": 0.691,
+        "lift": 19.61
+      },
+      {
+        "if": [
+          "ghee-amul-500"
+        ],
+        "then": [
+          "agarbatti",
+          "matchbox"
+        ],
+        "support": 0.014,
+        "confidence": 0.397,
+        "lift": 19.61
+      },
+      {
+        "if": [
+          "agarbatti"
+        ],
+        "then": [
+          "ghee-amul-500",
+          "matchbox"
+        ],
+        "support": 0.014,
+        "confidence": 0.365,
+        "lift": 17.95
+      },
+      {
+        "if": [
+          "ghee-amul-500",
+          "matchbox"
+        ],
+        "then": [
+          "agarbatti"
+        ],
+        "support": 0.014,
+        "confidence": 0.689,
+        "lift": 17.95
+      },
+      {
+        "if": [
+          "dishwash-vim",
+          "soap-lux"
+        ],
+        "then": [
+          "detergent-surf-1"
+        ],
+        "support": 0.0148,
+        "confidence": 0.662,
+        "lift": 16.94
+      },
+      {
+        "if": [
+          "detergent-surf-1"
+        ],
+        "then": [
+          "dishwash-vim",
+          "soap-lux"
+        ],
+        "support": 0.0148,
+        "confidence": 0.379,
+        "lift": 16.94
+      },
+      {
+        "if": [
+          "dishwash-vim"
+        ],
+        "then": [
+          "detergent-surf-1",
+          "soap-lux"
+        ],
+        "support": 0.0148,
+        "confidence": 0.342,
+        "lift": 15.2
+      },
+      {
+        "if": [
+          "detergent-surf-1",
+          "soap-lux"
+        ],
+        "then": [
+          "dishwash-vim"
+        ],
+        "support": 0.0148,
+        "confidence": 0.658,
+        "lift": 15.2
+      },
+      {
+        "if": [
+          "ghee-amul-500"
+        ],
+        "then": [
+          "agarbatti"
+        ],
+        "support": 0.0203,
+        "confidence": 0.575,
+        "lift": 14.98
+      },
+      {
+        "if": [
+          "agarbatti"
+        ],
+        "then": [
+          "ghee-amul-500"
+        ],
+        "support": 0.0203,
+        "confidence": 0.528,
+        "lift": 14.98
+      },
+      {
+        "if": [
+          "matchbox"
+        ],
+        "then": [
+          "agarbatti",
+          "ghee-amul-500"
+        ],
+        "support": 0.014,
+        "confidence": 0.302,
+        "lift": 14.92
+      },
+      {
+        "if": [
+          "agarbatti",
+          "ghee-amul-500"
+        ],
+        "then": [
+          "matchbox"
+        ],
+        "support": 0.014,
+        "confidence": 0.691,
+        "lift": 14.92
+      },
+      {
+        "if": [
+          "detergent-surf-1",
+          "dishwash-vim"
+        ],
+        "then": [
+          "soap-lux"
+        ],
+        "support": 0.0148,
+        "confidence": 0.694,
+        "lift": 13.43
+      },
+      {
+        "if": [
+          "soap-lux"
+        ],
+        "then": [
+          "detergent-surf-1",
+          "dishwash-vim"
+        ],
+        "support": 0.0148,
+        "confidence": 0.286,
+        "lift": 13.43
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "toor-dal-1"
+        ],
+        "support": 0.0214,
+        "confidence": 0.528,
+        "lift": 12.83
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "toor-dal-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "support": 0.0214,
+        "confidence": 0.52,
+        "lift": 12.83
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "rice-basmati-1",
+          "salt-tata-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.528,
+        "lift": 12.82
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "toor-dal-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "rice-basmati-1",
+          "salt-tata-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.368,
+        "lift": 12.82
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "rice-basmati-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "salt-tata-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.52,
+        "lift": 12.78
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "salt-tata-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "rice-basmati-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.372,
+        "lift": 12.78
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.518,
+        "lift": 12.77
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.373,
+        "lift": 12.77
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.365,
+        "lift": 12.71
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.528,
+        "lift": 12.71
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "then": [
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.522,
+        "lift": 12.71
+      },
+      {
+        "if": [
+          "salt-tata-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "oil-fortune-1",
+          "rice-basmati-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.368,
+        "lift": 12.71
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1",
+          "salt-tata-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.516,
+        "lift": 12.64
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1",
+          "salt-tata-1"
+        ],
+        "support": 0.0152,
+        "confidence": 0.371,
+        "lift": 12.64
+      },
+      {
+        "if": [
+          "oil-fortune-1",
+          "toor-dal-1"
+        ],
+        "then": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1"
+        ],
+        "support": 0.0214,
+        "confidence": 0.525,
+        "lift": 12.63
+      },
+      {
+        "if": [
+          "atta-aashirvaad-5",
+          "rice-basmati-1"
+        ],
+        "then": [
+          "oil-fortune-1",
+          "toor-dal-1"
+        ],
+        "support": 0.0214,
+        "confidence": 0.516,
+        "lift": 12.63
+      }
+    ]
+  },
+  "segmentation": {
+    "best_k": 5,
+    "results": {
+      "KMeans": {
+        "silhouette": 0.5725912064369794,
+        "davies_bouldin": 0.7298291379587962,
+        "calinski_harabasz": 485.74497356358864,
+        "k": 5,
+        "noise_share": 0.0,
+        "adjusted_rand_vs_personas": 0.937269796762849
+      },
+      "GaussianMixture": {
+        "silhouette": 0.5528207951403843,
+        "davies_bouldin": 0.8577215896325333,
+        "calinski_harabasz": 423.26861202062094,
+        "k": 6,
+        "noise_share": 0.0,
+        "adjusted_rand_vs_personas": 0.9645582642147643
+      },
+      "DBSCAN": {
+        "silhouette": 0.5129454608290152,
+        "davies_bouldin": 0.7508278608556083,
+        "calinski_harabasz": 305.4458321906568,
+        "k": 3,
+        "noise_share": 0.0425,
+        "adjusted_rand_vs_personas": 0.5158868673944726
+      },
+      "Agglomerative (Ward)": {
+        "silhouette": 0.5688156886458898,
+        "davies_bouldin": 0.734289915232082,
+        "calinski_harabasz": 475.89408232308256,
+        "k": 5,
+        "noise_share": 0.0,
+        "adjusted_rand_vs_personas": 0.9870019527351076
+      }
+    },
+    "sweep": {
+      "2": {
+        "silhouette": 0.46712547499950263,
+        "inertia": 1342.9208473188355
+      },
+      "3": {
+        "silhouette": 0.47416674820735094,
+        "inertia": 938.3526619190361
+      },
+      "4": {
+        "silhouette": 0.5359454422365887,
+        "inertia": 648.8619231569598
+      },
+      "5": {
+        "silhouette": 0.5725912064369794,
+        "inertia": 405.47825168631044
+      },
+      "6": {
+        "silhouette": 0.5337466393819763,
+        "inertia": 351.3439419033163
+      },
+      "7": {
+        "silhouette": 0.5232964068190994,
+        "inertia": 307.8012055247684
+      },
+      "8": {
+        "silhouette": 0.5143707745444032,
+        "inertia": 278.1325039440845
+      }
+    }
+  },
+  "udhaar": {
+    "positive_rate": 0.14833333333333334,
+    "n": 1200,
+    "results": {
+      "LogisticRegression": {
+        "cv_pr_auc": 0.48578590342263317,
+        "pr_auc": 0.48259826981181486,
+        "roc_auc": 0.7836470170454546,
+        "precision": 0.3225806451612903,
+        "recall": 0.6818181818181818,
+        "f1": 0.43795620437956206,
+        "recall_at_top20pct": 0.5909090909090909,
+        "confusion_matrix": [
+          [
+            193,
+            63
+          ],
+          [
+            14,
+            30
+          ]
+        ],
+        "threshold": 0.5
+      },
+      "RandomForest": {
+        "cv_pr_auc": 0.44531811748805517,
+        "pr_auc": 0.42676888367449883,
+        "roc_auc": 0.7789417613636364,
+        "precision": 0.37681159420289856,
+        "recall": 0.5909090909090909,
+        "f1": 0.46017699115044247,
+        "recall_at_top20pct": 0.5454545454545454,
+        "confusion_matrix": [
+          [
+            213,
+            43
+          ],
+          [
+            18,
+            26
+          ]
+        ],
+        "threshold": 0.5
+      },
+      "GradientBoosting": {
+        "cv_pr_auc": 0.41322930843891836,
+        "pr_auc": 0.3339302657509683,
+        "roc_auc": 0.7296253551136364,
+        "precision": 0.4,
+        "recall": 0.4090909090909091,
+        "f1": 0.4044943820224719,
+        "recall_at_top20pct": 0.45454545454545453,
+        "confusion_matrix": [
+          [
+            229,
+            27
+          ],
+          [
+            26,
+            18
+          ]
+        ],
+        "threshold": 0.2994845822630501
+      }
+    }
+  }
+}

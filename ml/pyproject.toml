@@ -1,0 +1,15 @@
+[project]
+name = "sros-ml"
+version = "1.0.0"
+requires-python = ">=3.11"
+description = "Smart Retail OS ML research + production pipeline"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning", "ignore::UserWarning"]
+
+[tool.coverage.run]
+source = ["sros_ml", "batch"]
+omit = ["*/__init__.py"]

@@ -1,0 +1,164 @@
+{
+  "spec": "docs/LEDGER_SPEC.md v1",
+  "testSecret": "test-secret-do-not-use-in-production",
+  "publicKeyBase64": "c7oEpfsm5Q/BEPA8tV0Zc5KLpY6+4VwnpbdXGaTL6Ok=",
+  "shopId": "shop_demo_01",
+  "genesisPrevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "canonicalCases": [
+    {
+      "name": "sorted keys",
+      "input": {
+        "b": 1,
+        "a": [
+          3,
+          2,
+          1
+        ],
+        "c": {
+          "z": true,
+          "y": null
+        }
+      },
+      "canonical": "{\"a\":[3,2,1],\"b\":1,\"c\":{\"y\":null,\"z\":true}}",
+      "sha256": "1e249c09afd78992af5138aaba168eace09179252528794ae2211f5e27b42ea0"
+    },
+    {
+      "name": "hindi text stays raw utf-8",
+      "input": {
+        "name": "दूध",
+        "qty": 2
+      },
+      "canonical": "{\"name\":\"दूध\",\"qty\":2}",
+      "sha256": "52a4d34c3856a5edd1765adca231430eebb3a719d8288b01c5d3064ad1f177de"
+    },
+    {
+      "name": "escapes",
+      "input": {
+        "s": "quote\" back\\ nl\n tab\t ctl\u0001 bell\u0007 del"
+      },
+      "canonical": "{\"s\":\"quote\\\" back\\\\ nl\\n tab\\t ctl\\u0001 bell\\u0007 del\"}",
+      "sha256": "f9eceb8dc1063fc1dc25f457e8d5a4dc80a405a881eaf720ec710668c1600716"
+    },
+    {
+      "name": "negative and big ints",
+      "input": {
+        "n": -42,
+        "max": 9007199254740991,
+        "zero": 0
+      },
+      "canonical": "{\"max\":9007199254740991,\"n\":-42,\"zero\":0}",
+      "sha256": "44304bfb8a387aaf16b9268c6368a97f8536ae26f064bd5562db5906d61b1fd8"
+    },
+    {
+      "name": "empty containers",
+      "input": {
+        "o": {},
+        "a": [],
+        "s": ""
+      },
+      "canonical": "{\"a\":[],\"o\":{},\"s\":\"\"}",
+      "sha256": "c127f9b3c6f4233b3976f8e2d54486ab15f9a46cfa50fc14ae6d0787d1ac2917"
+    }
+  ],
+  "rejectFloats": [
+    {
+      "price": 1.5
+    },
+    {
+      "nested": [
+        0.1
+      ]
+    }
+  ],
+  "chain": [
+    {
+      "bill": {
+        "billId": "b_0001",
+        "createdAt": 1767225600000,
+        "customerId": null,
+        "items": [
+          {
+            "sku": "milk-amul-500",
+            "qtyMilli": 2000,
+            "unitPricePaise": 2900
+          },
+          {
+            "sku": "parleg-80",
+            "qtyMilli": 3000,
+            "unitPricePaise": 1000
+          }
+        ],
+        "paymentMode": "cash",
+        "totalPaise": 8800
+      },
+      "billCanonical": "{\"billId\":\"b_0001\",\"createdAt\":1767225600000,\"customerId\":null,\"items\":[{\"qtyMilli\":2000,\"sku\":\"milk-amul-500\",\"unitPricePaise\":2900},{\"qtyMilli\":3000,\"sku\":\"parleg-80\",\"unitPricePaise\":1000}],\"paymentMode\":\"cash\",\"totalPaise\":8800}",
+      "entry": {
+        "billId": "b_0001",
+        "payloadHash": "450ce1d55b9d719eed1fda531beb98bba9642b0bec598aa4e13659080dc7cff1",
+        "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "seq": 0,
+        "shopId": "shop_demo_01",
+        "timestamp": 1767225600000
+      },
+      "entryCanonical": "{\"billId\":\"b_0001\",\"payloadHash\":\"450ce1d55b9d719eed1fda531beb98bba9642b0bec598aa4e13659080dc7cff1\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":0,\"shopId\":\"shop_demo_01\",\"timestamp\":1767225600000}",
+      "entryHash": "793c1ba8aec84fe0526d4dc54062f1c4cec9e035d44ef7580e27d5cef5a35379",
+      "signature": "6OOMr7a/Zq9t/o2IOFQ/v3IKzgQ/y93nKzDJY/X5gqYmlzzeDcInKjGpG16kZLlCgSRu5f9e4Mccl4NE9VRlDw=="
+    },
+    {
+      "bill": {
+        "billId": "b_0002",
+        "createdAt": 1767229200000,
+        "customerId": "c_ramesh",
+        "items": [
+          {
+            "sku": "sugar-1",
+            "qtyMilli": 1500,
+            "unitPricePaise": 4800
+          }
+        ],
+        "paymentMode": "udhaar",
+        "totalPaise": 7200
+      },
+      "billCanonical": "{\"billId\":\"b_0002\",\"createdAt\":1767229200000,\"customerId\":\"c_ramesh\",\"items\":[{\"qtyMilli\":1500,\"sku\":\"sugar-1\",\"unitPricePaise\":4800}],\"paymentMode\":\"udhaar\",\"totalPaise\":7200}",
+      "entry": {
+        "billId": "b_0002",
+        "payloadHash": "7979d3582b220b5caa0fee4c58ecec0d4a5272dd5c00010563b2726311d7a1d8",
+        "prevHash": "793c1ba8aec84fe0526d4dc54062f1c4cec9e035d44ef7580e27d5cef5a35379",
+        "seq": 1,
+        "shopId": "shop_demo_01",
+        "timestamp": 1767229200000
+      },
+      "entryCanonical": "{\"billId\":\"b_0002\",\"payloadHash\":\"7979d3582b220b5caa0fee4c58ecec0d4a5272dd5c00010563b2726311d7a1d8\",\"prevHash\":\"793c1ba8aec84fe0526d4dc54062f1c4cec9e035d44ef7580e27d5cef5a35379\",\"seq\":1,\"shopId\":\"shop_demo_01\",\"timestamp\":1767229200000}",
+      "entryHash": "2884dfd716d59a79f880fb8e76e8ddbccbdb38cf955f460dad3e860853d9b36c",
+      "signature": "phrwOr3tc8vVHSsJQ+uVkRyeU3W3D/JZbtlOvtq7FGQMSLhAYOCL/QdqJ2NsVkEHVs1CqNJliGUEQQsvZcNPDg=="
+    },
+    {
+      "bill": {
+        "billId": "b_0003",
+        "createdAt": 1767232800000,
+        "customerId": null,
+        "items": [
+          {
+            "sku": "tea-tata-250",
+            "qtyMilli": 1000,
+            "unitPricePaise": 15000
+          }
+        ],
+        "paymentMode": "upi",
+        "totalPaise": 15000
+      },
+      "billCanonical": "{\"billId\":\"b_0003\",\"createdAt\":1767232800000,\"customerId\":null,\"items\":[{\"qtyMilli\":1000,\"sku\":\"tea-tata-250\",\"unitPricePaise\":15000}],\"paymentMode\":\"upi\",\"totalPaise\":15000}",
+      "entry": {
+        "billId": "b_0003",
+        "payloadHash": "66752b7c0521188c59a97acea5b206591b7bf81537579dfad5ce1d0be1c49a06",
+        "prevHash": "2884dfd716d59a79f880fb8e76e8ddbccbdb38cf955f460dad3e860853d9b36c",
+        "seq": 2,
+        "shopId": "shop_demo_01",
+        "timestamp": 1767232800000
+      },
+      "entryCanonical": "{\"billId\":\"b_0003\",\"payloadHash\":\"66752b7c0521188c59a97acea5b206591b7bf81537579dfad5ce1d0be1c49a06\",\"prevHash\":\"2884dfd716d59a79f880fb8e76e8ddbccbdb38cf955f460dad3e860853d9b36c\",\"seq\":2,\"shopId\":\"shop_demo_01\",\"timestamp\":1767232800000}",
+      "entryHash": "0fa164e5f0cb33cff30f8e6710673bea3531db9f8e41c94c0e87b2c544bcf712",
+      "signature": "NRGmrYtRWsxRuOwatvQkc1N+9YMwrXqtybPIDyrCz00e96PW/OFlwTnN+Cl1phSdi4lZF7fn10L+go3ygbMVDQ=="
+    }
+  ]
+}

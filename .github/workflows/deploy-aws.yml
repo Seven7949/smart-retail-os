@@ -1,0 +1,89 @@
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      alert_email:
+        description: Email for the AWS budget alert + daily digest (optional)
+        required: false
+      budget_usd:
+        description: Monthly budget alert threshold in USD
+        default: "10"
+      demo_mode:
+        description: Allow 'cdk destroy' to delete data (good for a student account)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write   # only used if you configure an OIDC role (vars.AWS_ROLE_ARN)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      HAS_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: infra/package-lock.json }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ledger }
+      - name: Build Rust signer for Lambda (arm64)
+        working-directory: ledger
+        run: |
+          pip install cargo-lambda
+          cargo lambda build --release --arm64 -p ledger-signer --bin ledger-signer
+          ls -lh target/lambda/ledger-signer/
+      - name: Configure AWS credentials (OIDC role)
+        if: ${{ vars.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials (access keys)
+        if: ${{ vars.AWS_ROLE_ARN == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Stage shared spec for the ML container
+        run: cp -r spec ml/spec
+      - name: CDK deploy
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk bootstrap
+          npx cdk deploy SmartRetailOS --require-approval never --outputs-file cdk-outputs.json \
+            -c alertEmail="${{ inputs.alert_email }}" -c budgetUsd="${{ inputs.budget_usd }}" -c demo="${{ inputs.demo_mode }}"
+      - name: Show outputs
+        working-directory: infra
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          o = json.load(open("cdk-outputs.json"))["SmartRetailOS"]
+          print("## Deployed ✅\n\nAdd these as **repository variables** (Settings → Secrets and variables → Actions → Variables), then re-run *Build Android APK*:\n")
+          print("| Variable | Value |\n|---|---|")
+          for k, v in [("API_URL", o["ApiUrl"]), ("AWS_REGION", o["Region"]), ("USER_POOL_ID", o["UserPoolId"]), ("USER_POOL_CLIENT_ID", o["UserPoolClientId"])]:
+              print(f"| `{k}` | `{v}` |")
+          print("\nOr paste them in the app: Settings → Cloud sync → Edit cloud details.")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+      - name: Save outputs as repo variables (optional, needs GH_ADMIN_TOKEN secret)
+        if: ${{ env.HAS_ADMIN_TOKEN == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+        working-directory: infra
+        run: |
+          o=$(jq -r '.SmartRetailOS' cdk-outputs.json)
+          gh variable set API_URL --body "$(echo "$o" | jq -r .ApiUrl)"
+          gh variable set AWS_REGION --body "$(echo "$o" | jq -r .Region)"
+          gh variable set USER_POOL_ID --body "$(echo "$o" | jq -r .UserPoolId)"
+          gh variable set USER_POOL_CLIENT_ID --body "$(echo "$o" | jq -r .UserPoolClientId)"
+          gh workflow run android-apk.yml
