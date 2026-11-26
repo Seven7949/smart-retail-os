@@ -15,7 +15,7 @@ function jwt(claims: object) {
 }
 
 /** Fake Cognito + API that signs with the reference vectors' semantics. */
-function fakeCloud(opts: { sub?: string } = {}) {
+function fakeCloud(opts: { sub?: string; serverHead?: { seq: number; entryHash: string } } = {}) {
   const calls: { url: string; body: any; headers: any }[] = [];
   const sub = opts.sub ?? 'user-sub-1';
   const fetchFn = jest.fn(async (url: string, init: any) => {
@@ -31,7 +31,7 @@ function fakeCloud(opts: { sub?: string } = {}) {
       return ok({});
     }
     if (url.endsWith('/sync')) {
-      return ok({ accepted: (body.chain ?? []).map((c: any) => ({ seq: c.entry.seq, entryHash: c.entryHash, signature: 'c2ln' })), head: null, counts: {}, serverTime: 1 });
+      return ok({ accepted: (body.chain ?? []).map((c: any) => ({ seq: c.entry.seq, entryHash: c.entryHash, signature: 'c2ln' })), head: opts.serverHead ?? null, counts: {}, serverTime: 1 });
     }
     if (url.endsWith('/ledger/public-key')) return ok({ publicKey: vectors.publicKeyBase64 });
     if (url.endsWith('/insights')) return ok({ insights: { meta: { billCount: 3 } } });
@@ -66,6 +66,14 @@ describe('store + sqlite repo', () => {
     expect(reloaded.getState().settings.shopName).toBe('Gupta Kirana');
     expect(reloaded.getState().chain).toHaveLength(1);
     expect(reloaded.getState().items.find((i) => i.sku === milk.sku)!.stockMilli).toBe(22000);
+  });
+
+  test('bill timestamps never go backwards even if the phone clock does', async () => {
+    const { store } = await freshStore();
+    await store.startFresh('x');
+    const a = await store.saveBill(addToCart([], store.getState().items[0]), 'cash', null, NOW);
+    const b = await store.saveBill(addToCart([], store.getState().items[0]), 'cash', null, NOW - 86_400_000);
+    expect(b.bill.createdAt).toBe(a.bill.createdAt);
   });
 
   test('ledger table refuses to overwrite history', async () => {
@@ -144,7 +152,7 @@ describe('cloud flows', () => {
     expect(after.settings.publicKey).toBe(vectors.publicKeyBase64);
     expect(after.cloudInsights).toEqual({ meta: { billCount: 3 } });
     expect(after.udhaar.every((u) => u.synced)).toBe(true);
-    const syncCall = cloud.calls.find((x) => x.url.endsWith('/sync'))!;
+    const syncCall = cloud.calls.find((x) => x.url.endsWith('/sync') && x.body.customers)!;
     expect(syncCall.headers.Authorization).toMatch(/^Bearer /);
     expect(JSON.stringify(syncCall.body.customers)).not.toContain('9876543210');
     // signatures are fake ('c2ln'), so verification with the real key must now FAIL -> tamper detection works
@@ -168,6 +176,30 @@ describe('cloud flows', () => {
     expect(s.udhaar.map((u) => !!u.synced)).toEqual([true, false]);
     expect(s.chain).toHaveLength(1);
     expect(s.chain[0].signature).toBeNull(); // created after the batch was sent
+  });
+
+  test('refuses to fork an existing cloud ledger; interrupted sign-in self-heals', async () => {
+    const cloud = fakeCloud({ serverHead: { seq: 41, entryHash: 'a'.repeat(64) } });
+    const { repo, store } = await freshStore(cloud.fetchFn);
+    await store.updateSettings({ cloud: CFG });
+    await store.startFresh('x');
+    await store.saveBill(addToCart([], store.getState().items[0]), 'cash', null, NOW);
+    await expect(store.signIn('a@b.co', 'pw12345678')).rejects.toThrow(/already has a cloud ledger with 42 bills/);
+    expect(store.getState().settings.shopId).toBe('local');
+    // simulate a crash after settings were saved but before the chain was rewritten
+    await repo.setKV('settings', JSON.stringify({ ...store.getState().settings, shopId: 'user-sub-1' }));
+    const healed = await Store.create(repo);
+    expect(healed.getState().chain[0].entry.shopId).toBe('user-sub-1');
+    expect(healed.verifyLocal().valid).toBe(true);
+  });
+
+  test('double taps cannot corrupt the ledger', async () => {
+    const { store } = await freshStore();
+    await store.startFresh('x');
+    const item = store.getState().items[0];
+    await Promise.all([1, 2, 3].map((i) => store.saveBill(addToCart([], item), 'cash', null, NOW + i)));
+    expect(store.getState().chain.map((r) => r.entry.seq)).toEqual([0, 1, 2]);
+    expect(store.verifyLocal().valid).toBe(true);
   });
 
   test('wrong password and unconfigured cloud give friendly errors', async () => {

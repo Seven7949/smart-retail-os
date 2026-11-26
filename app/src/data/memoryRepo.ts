@@ -25,6 +25,11 @@ export class MemoryRepo implements Repo {
     }
     rs.forEach((r) => this.chain.set(r.entry.seq, r));
   }
+  async commitBill(r: ChainRecord, items: readonly Item[], udhaar: readonly UdhaarTxn[]) {
+    await this.appendChain([r]);
+    await this.saveItems(items);
+    await this.saveUdhaar(udhaar);
+  }
   async replaceChain(rs: readonly ChainRecord[]) { this.chain.clear(); await this.appendChain(rs); }
   async setSignatures(sigs: readonly { seq: number; signature: string }[]) {
     sigs.forEach((s) => {

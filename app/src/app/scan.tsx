@@ -74,9 +74,13 @@ export default function Scan() {
       // invoices count packs/pieces; loose items (kg) keep the invoice quantity
       return { sku: it.sku, qtyMilli: r.qtyMilli, costPaise: r.line.unitPricePaise };
     });
-    const n = await store.receiveStock(lines);
-    toast(`${n} items updated`);
-    router.back();
+    try {
+      const n = await store.receiveStock(lines);
+      toast(`${n} items updated`);
+      router.back();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not update stock', 'danger');
+    }
   };
 
   const candidates: Item[] = useMemo(() => {

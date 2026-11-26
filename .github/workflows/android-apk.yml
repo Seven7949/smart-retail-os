@@ -7,16 +7,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # to publish the APK as a GitHub Release
+  contents: read
 
 concurrency:
   group: apk
   cancel-in-progress: true
 
 jobs:
-  apk:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     defaults: { run: { working-directory: app } }
     env:
       # Public cloud identifiers (not secrets). Set them as repository *variables*
@@ -25,9 +25,10 @@ jobs:
       EXPO_PUBLIC_AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
       EXPO_PUBLIC_USER_POOL_ID: ${{ vars.USER_POOL_ID }}
       EXPO_PUBLIC_USER_POOL_CLIENT_ID: ${{ vars.USER_POOL_CLIENT_ID }}
-      NODE_ENV: production
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
       - uses: actions/setup-java@v4
@@ -37,30 +38,57 @@ jobs:
       - run: node scripts/sync-spec.js
       - name: Unit tests must pass before building
         run: npx jest --ci
+      - name: Release keystore (from secrets)
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - name: Generate native Android project (Continuous Native Generation)
         run: npx expo prebuild --platform android --clean --no-install
       - name: Build release APK
         working-directory: app/android
+        env:
+          NODE_ENV: production
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> gradle.properties
           ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk dist/DukaanAI-v1.0.${{ github.run_number }}.apk
+          suffix=$([ "$HAS_KEYSTORE" = "true" ] && echo "" || echo "-test")
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/DukaanAI-v1.0.${{ github.run_number }}${suffix}.apk"
           ls -lh dist
+          if [ "$HAS_KEYSTORE" != "true" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: this APK is signed with the public debug key. Fine for demos and testing, not for real shops (see README)."
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: DukaanAI-apk
           path: app/dist/*.apk
           retention-days: 30
-      - name: Publish GitHub Release (easy download on a phone)
-        uses: softprops/action-gh-release@v2
+
+  release:
+    # Only this small job can write to the repo; it runs no third-party build code.
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: DukaanAI-apk, path: dist }
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-v1.0.${{ github.run_number }}
           name: Dukaan AI v1.0.${{ github.run_number }} (Android APK)
           body: |
-            Install on Android: download the APK below, open it, and allow "Install unknown apps" when asked.
-            Built from ${{ github.sha }}. Cloud: ${{ vars.API_URL != '' && 'connected to AWS' || 'offline demo build (set API_URL variables to connect)' }}.
-          files: app/dist/*.apk
+            **Install on Android:** download the `.apk` below on your phone, open it, and allow "Install unknown apps" when asked. Then tap **Explore the demo shop**.
+
+            Built from ${{ github.sha }}. A file name ending in `-test` means the APK is signed with the public debug key: fine for demos, but add a release keystore before giving it to real shops.
+          files: dist/*.apk
           make_latest: true

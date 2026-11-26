@@ -6,7 +6,7 @@
 #![forbid(unsafe_code)]
 
 use ledger_core::Signer;
-use ledger_signer::handler::{handle, Request};
+use ledger_signer::handler::{handle, now_ms, Request};
 use std::io::Read;
 use std::process::ExitCode;
 
@@ -27,7 +27,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
     let out = match serde_json::from_str::<Request>(&input) {
-        Ok(req) => serde_json::to_string(&handle(&signer, req)),
+        Ok(req) => serde_json::to_string(&handle(&signer, req, now_ms())),
         Err(_) => Ok(r#"{"ok":false,"error":{"seq":-1,"code":"MALFORMED_REQUEST"}}"#.to_string()),
     };
     match out {

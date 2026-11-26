@@ -29,6 +29,7 @@ export default function CustomerScreen() {
   const risk = insights?.udhaar.find((r) => r.customerId === id);
   const [entry, setEntry] = useState<UdhaarTxn['kind'] | null>(null);
   const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
 
   if (!customer) {
     return <Screen title="—"><Button title={t('done')} onPress={() => router.back()} /></Screen>;
@@ -37,6 +38,8 @@ export default function CustomerScreen() {
   const save = async () => {
     const paise = parseRupees(amount);
     if (!paise || !entry) { toast('Enter an amount', 'danger'); return; }
+    if (busy) return;
+    setBusy(true);
     try {
       await store.recordUdhaar(customer.customerId, entry, paise);
       toast(entry === 'payment' ? `${formatRupees(paise)} ✓` : `${t('giveCredit')} ✓`);
@@ -44,6 +47,8 @@ export default function CustomerScreen() {
       setAmount('');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Error', 'danger');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -97,7 +102,7 @@ export default function CustomerScreen() {
       </Card>
       <Sheet visible={!!entry} onClose={() => setEntry(null)} title={entry === 'credit' ? t('giveCredit') : t('receivePayment')}>
         <Field label={t('amount')} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
-        <Button title={t('save')} icon="checkmark" onPress={save} />
+        <Button title={t('save')} icon="checkmark" onPress={save} loading={busy} />
       </Sheet>
     </Screen>
   );

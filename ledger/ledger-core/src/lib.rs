@@ -14,7 +14,7 @@ mod signer;
 pub use canonical::{canonical, sha256_hex, CanonError, MAX_SAFE_INTEGER};
 pub use chain::{
     build_entry, validate_and_sign, verify_chain, verify_chain_from, ChainHead, ChainItem, Failure,
-    FailureCode, SignedHash, VerifyReport, MAX_BATCH,
+    FailureCode, SignedHash, VerifyReport, MAX_BATCH, MAX_CLOCK_SKEW_MS,
 };
 pub use model::{
     entry_hash, payload_hash, Bill, BillError, LedgerEntry, LineItem, PaymentMode, GENESIS_HASH,

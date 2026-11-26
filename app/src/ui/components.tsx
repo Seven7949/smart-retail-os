@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadow, space, toneColors, type, type Tone } from './theme';
+import { ToastView } from './toast';
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -209,6 +210,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
           {title ? <Text style={[type.title, { marginBottom: space.md }]}>{title}</Text> : null}
           <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 560 }}>{children}</ScrollView>
         </Animated.View>
+        <ToastView />
       </KeyboardAvoidingView>
     </Modal>
   );

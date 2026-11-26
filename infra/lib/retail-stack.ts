@@ -16,7 +16,6 @@ import {
   aws_s3 as s3,
   aws_secretsmanager as secrets,
   aws_sns as sns,
-  aws_sns_subscriptions as subs,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -74,6 +73,7 @@ export class RetailStack extends Stack {
       encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
       deletionProtection: !destroy,
       removalPolicy: removal,
+      timeToLiveAttribute: 'ttl', // quota counters and scan markers expire automatically
     });
 
     const secureBucket = (id: string, expireDays: number) => new s3.Bucket(this, id, {
@@ -95,8 +95,9 @@ export class RetailStack extends Stack {
       removalPolicy: removal,
     });
 
+    // Each shop owner is subscribed with their own verified email + a shopId filter policy
+    // (done by the sync Lambda), so nobody receives another shop's digest.
     const digestTopic = new sns.Topic(this, 'DailyDigest', { enforceSSL: true });
-    if (props.alertEmail) digestTopic.addSubscription(new subs.EmailSubscription(props.alertEmail));
 
     // ---------------- Rust ledger signer ----------------
     const signer = new lambda.Function(this, 'LedgerSigner', {
@@ -148,12 +149,14 @@ export class RetailStack extends Stack {
         logGroup: new logs.LogGroup(this, `${id}Logs`, { retention: ONE_MONTH, removalPolicy: RemovalPolicy.DESTROY }),
       });
 
-    const syncFn = api('SyncFn', 'handlers.sync.handler', { SIGNER_FUNCTION: signer.functionName }, 30, 512);
+    const syncFn = api('SyncFn', 'handlers.sync.handler', { SIGNER_FUNCTION: signer.functionName, DIGEST_TOPIC_ARN: digestTopic.topicArn }, 30, 512);
     table.grantReadWriteData(syncFn);
     signer.grantInvoke(syncFn);
+    syncFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['sns:Subscribe'], resources: [digestTopic.topicArn] }));
 
     const insightsFn = api('InsightsFn', 'handlers.insights.handler', { ML_FUNCTION: mlBatch.functionName });
-    table.grantReadWriteData(insightsFn);
+    table.grantReadData(insightsFn);
+    insightsFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:PutItem'], resources: [table.tableArn] }));
     mlBatch.grantInvoke(insightsFn);
 
     const ledgerFn = api('LedgerFn', 'handlers.ledger.handler', { SIGNER_FUNCTION: signer.functionName }, 30, 512);
@@ -161,11 +164,13 @@ export class RetailStack extends Stack {
     signer.grantInvoke(ledgerFn);
 
     const scanFn = api('ScanFn', 'handlers.scan.handler', { SCAN_BUCKET: scans.bucketName }, 30);
+    table.grantReadWriteData(scanFn); // quota counters + parse-once markers
     scans.grantPut(scanFn, 'scans/*');
     scans.grantRead(scanFn, 'scans/*');
     scanFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['textract:AnalyzeExpense'], resources: ['*'] }));
 
     const voiceFn = api('VoiceFn', 'handlers.voice.handler', { BEDROCK_MODEL_ID: props.bedrockModelId ?? DEFAULT_MODEL }, 30);
+    table.grantReadWriteData(voiceFn); // per-shop daily quota counter
     voiceFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['bedrock:InvokeModel'],
       resources: [

@@ -11,14 +11,18 @@ quantity is range-checked before anything is returned. Nothing is executed.
 from __future__ import annotations
 
 import os
+import time
 
 import boto3
 
+from common import repo, validate
 from common.http import ApiError, api, json_body, shop_id
 
 MAX_TEXT = 300
 MAX_CATALOG = 400
 MAX_QTY = 1000
+MAX_PROMPT_CHARS = 16_000
+DAILY_LIMIT = 300  # Bedrock calls per shop per day (cost guard)
 DEFAULT_MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 SYSTEM = (
@@ -49,9 +53,16 @@ def clean_catalog(raw) -> list[dict]:
         raise ApiError(400, "BAD_CATALOG", f"catalog must have 1..{MAX_CATALOG} items")
     out = []
     for it in raw:
-        if not isinstance(it, dict) or not isinstance(it.get("sku"), str) or not isinstance(it.get("name"), str):
+        if not isinstance(it, dict):
             raise ApiError(400, "BAD_CATALOG", "catalog items need sku and name")
-        out.append({"sku": it["sku"][:64], "name": it["name"][:60], "unit": it.get("unit", "pcs")})
+        try:
+            sku = validate._id(it.get("sku"), "sku")
+            name = validate._str(it.get("name"), "name", 60)
+        except ValueError:
+            raise ApiError(400, "BAD_CATALOG", "catalog items need a valid sku and name") from None
+        out.append({"sku": sku, "name": name.replace("|", "/"), "unit": it.get("unit") if it.get("unit") in validate.UNITS else "pcs"})
+    if sum(len(c["sku"]) + len(c["name"]) + 8 for c in out) > MAX_PROMPT_CHARS:
+        raise ApiError(400, "BAD_CATALOG", "catalog is too large")
     return out
 
 
@@ -66,18 +77,23 @@ def validate_lines(lines, catalog: list[dict]) -> list[dict]:
             continue
         if not 0 < qty <= MAX_QTY:
             continue
-        out.append({"sku": sku, "qtyMilli": int(round(qty * 1000)), "name": known[sku]["name"]})
+        qty_milli = int(round(qty * 1000))
+        if qty_milli < 1:
+            continue  # e.g. 0.0001 would round to 0 and crash the phone's cart
+        out.append({"sku": sku, "qtyMilli": qty_milli, "name": known[sku]["name"]})
     return out
 
 
 @api
 def handler(event, _ctx):
-    shop_id(event)  # authenticated callers only
+    shop = shop_id(event)  # authenticated callers only
     body = json_body(event)
     text = body.get("text")
     if not isinstance(text, str) or not 0 < len(text.strip()) <= MAX_TEXT:
         raise ApiError(400, "BAD_TEXT", f"text must be 1..{MAX_TEXT} characters")
     catalog = clean_catalog(body.get("catalog"))
+    if not repo.consume_quota(repo.table(), shop, "voice", DAILY_LIMIT, int(time.time() * 1000)):
+        raise ApiError(429, "DAILY_LIMIT", "Daily AI voice limit reached; the offline parser still works.")
     listing = "\n".join(f"{c['sku']} | {c['name']} | {c['unit']}" for c in catalog)
     resp = boto3.client("bedrock-runtime").converse(
         modelId=os.environ.get("BEDROCK_MODEL_ID", DEFAULT_MODEL),

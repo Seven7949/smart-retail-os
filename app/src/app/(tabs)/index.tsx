@@ -34,7 +34,7 @@ export default function Home() {
 
   const actions: { icon: IconName; label: string; onPress: () => void; tone: 'primary' | 'accent' | 'info' | 'success' }[] = [
     { icon: 'receipt-outline', label: t('newBill'), onPress: () => router.push('/bill'), tone: 'primary' },
-    { icon: 'mic-outline', label: t('voiceBill'), onPress: () => router.push({ pathname: '/bill', params: { voice: '1' } }), tone: 'accent' },
+    { icon: 'mic-outline', label: t('voiceBill'), onPress: () => router.push({ pathname: '/bill', params: { voice: String(Date.now()) } }), tone: 'accent' },
     { icon: 'scan-outline', label: t('scanInvoice'), onPress: () => router.push('/scan'), tone: 'info' },
     { icon: 'book-outline', label: t('addUdhaar'), onPress: () => router.push('/khata'), tone: 'success' },
   ];

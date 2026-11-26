@@ -16,7 +16,7 @@ import type { Repo } from './repo';
 
 export type Lang = 'en' | 'hi';
 export const LOCAL_SHOP_ID = 'local';
-const SYNC_BATCH = 200;
+const SYNC_BATCH = 33; // = entries per DynamoDB transaction on the server: each request is all-or-nothing
 
 export interface Settings {
   readonly lang: Lang;
@@ -54,6 +54,14 @@ export class Store {
   private state: State;
   private listeners = new Set<() => void>();
   private insightsCache: { version: number; value: Insights } | null = null;
+  private lock: Promise<unknown> = Promise.resolve();
+
+  /** Mutating actions run one at a time, so a double tap can never reuse a ledger seq. */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.lock.then(fn, fn);
+    this.lock = run.catch(() => undefined);
+    return run;
+  }
 
   private constructor(private readonly repo: Repo, initial: State, private readonly fetchFn: typeof fetch) {
     this.state = initial;
@@ -63,8 +71,14 @@ export class Store {
     const snap = await repo.load();
     const saved = snap.kv.settings ? (JSON.parse(snap.kv.settings) as Partial<Settings>) : {};
     const settings: Settings = { ...DEFAULT_SETTINGS, ...saved, cloud: { ...DEFAULT_SETTINGS.cloud, ...(saved.cloud ?? {}) } };
+    let chain = snap.chain;
+    // Self-heal an interrupted sign-in: unsigned local bills are re-chained under the current shop id.
+    if (chain.length && chain[0].entry.shopId !== settings.shopId && !chain.some((r) => r.signature)) {
+      chain = buildChain(settings.shopId, chain.map((r) => r.bill));
+      await repo.replaceChain(chain);
+    }
     return new Store(repo, {
-      ready: true, items: snap.items, customers: snap.customers, udhaar: snap.udhaar, chain: snap.chain, settings,
+      ready: true, items: snap.items, customers: snap.customers, udhaar: snap.udhaar, chain, settings,
       version: 1, cloudInsights: snap.kv.cloudInsights ? JSON.parse(snap.kv.cloudInsights) : null, syncing: false,
     }, fetchFn);
   }
@@ -128,25 +142,32 @@ export class Store {
   }
 
   // ---------- billing ----------
-  async saveBill(cart: Cart, mode: PaymentMode, customerId: string | null, now = Date.now()): Promise<ChainRecord> {
+  saveBill(cart: Cart, mode: PaymentMode, customerId: string | null, clock = Date.now()): Promise<ChainRecord> {
+    return this.serial(() => this.saveBillNow(cart, mode, customerId, clock));
+  }
+
+  private async saveBillNow(cart: Cart, mode: PaymentMode, customerId: string | null, clock: number): Promise<ChainRecord> {
+    // The ledger never goes back in time (the signer rejects that), even if the phone clock was changed.
+    const last = this.state.chain[this.state.chain.length - 1];
+    const now = Math.max(clock, last ? last.bill.createdAt : 0);
     const bill = createBill(cart, mode, customerId, newId('b', now), now);
     const record = appendBill(this.state.settings.shopId, this.head(), bill);
     const items = applyBillToStock(this.state.items, bill);
     const changed = items.filter((it, i) => it !== this.state.items[i]);
-    await this.repo.appendChain([record]);
-    await this.repo.saveItems(changed);
-    let udhaar = this.state.udhaar;
-    if (mode === 'udhaar' && customerId) {
-      const txn: UdhaarTxn = { id: newId('u', now), customerId, kind: 'credit', amountPaise: bill.totalPaise, ts: now, billId: bill.billId };
-      await this.repo.saveUdhaar([txn]);
-      udhaar = [...udhaar, txn];
-    }
-    this.set({ chain: [...this.state.chain, record], items, udhaar });
+    const credit: UdhaarTxn[] = mode === 'udhaar' && customerId
+      ? [{ id: newId('u', now), customerId, kind: 'credit', amountPaise: bill.totalPaise, ts: now, billId: bill.billId }]
+      : [];
+    await this.repo.commitBill(record, changed, credit);
+    this.set({ chain: [...this.state.chain, record], items, udhaar: [...this.state.udhaar, ...credit] });
     return record;
   }
 
   // ---------- inventory ----------
-  async upsertItem(item: Item): Promise<void> {
+  upsertItem(item: Item): Promise<void> {
+    return this.serial(() => this.upsertItemNow(item));
+  }
+
+  private async upsertItemNow(item: Item): Promise<void> {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(item.sku)) throw new StoreError('invalid sku');
     if (!item.name.trim() || item.pricePaise <= 0) throw new StoreError('name and price are required');
     await this.repo.saveItems([item]);
@@ -155,7 +176,11 @@ export class Store {
   }
 
   /** Add received stock (e.g. from a scanned supplier invoice). */
-  async receiveStock(lines: readonly { sku: string; qtyMilli: number; costPaise?: number | null }[]): Promise<number> {
+  receiveStock(lines: readonly { sku: string; qtyMilli: number; costPaise?: number | null }[]): Promise<number> {
+    return this.serial(() => this.receiveStockNow(lines));
+  }
+
+  private async receiveStockNow(lines: readonly { sku: string; qtyMilli: number; costPaise?: number | null }[]): Promise<number> {
     const bySku = new Map<string, { qty: number; cost?: number | null }>();
     lines.forEach((l) => {
       if (l.qtyMilli > 0) bySku.set(l.sku, { qty: (bySku.get(l.sku)?.qty ?? 0) + l.qtyMilli, cost: l.costPaise });
@@ -172,7 +197,11 @@ export class Store {
   }
 
   // ---------- khata (udhaar) ----------
-  async addCustomer(name: string, phone?: string, creditLimitPaise?: number): Promise<Customer> {
+  addCustomer(name: string, phone?: string, creditLimitPaise?: number): Promise<Customer> {
+    return this.serial(() => this.addCustomerNow(name, phone, creditLimitPaise));
+  }
+
+  private async addCustomerNow(name: string, phone?: string, creditLimitPaise?: number): Promise<Customer> {
     const clean = name.trim();
     if (!clean || clean.length > 80) throw new StoreError('enter a name');
     if (phone && !/^\+?\d{10,13}$/.test(phone.replace(/[\s-]/g, ''))) throw new StoreError('enter a valid phone number');
@@ -182,7 +211,11 @@ export class Store {
     return c;
   }
 
-  async recordUdhaar(customerId: string, kind: UdhaarTxn['kind'], amountPaise: number, now = Date.now()): Promise<UdhaarTxn> {
+  recordUdhaar(customerId: string, kind: UdhaarTxn['kind'], amountPaise: number, now = Date.now()): Promise<UdhaarTxn> {
+    return this.serial(() => this.recordUdhaarNow(customerId, kind, amountPaise, now));
+  }
+
+  private async recordUdhaarNow(customerId: string, kind: UdhaarTxn['kind'], amountPaise: number, now: number): Promise<UdhaarTxn> {
     if (!this.state.customers.some((c) => c.customerId === customerId)) throw new StoreError('unknown customer');
     if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) throw new StoreError('enter an amount');
     const txn: UdhaarTxn = { id: newId(kind === 'credit' ? 'u' : 'p', now), customerId, kind, amountPaise, ts: now };
@@ -191,7 +224,11 @@ export class Store {
     return txn;
   }
 
-  async markReminderSent(customerId: string): Promise<void> {
+  markReminderSent(customerId: string): Promise<void> {
+    return this.serial(() => this.markReminderSentNow(customerId));
+  }
+
+  private async markReminderSentNow(customerId: string): Promise<void> {
     const customers = this.state.customers.map((c) => (c.customerId === customerId ? { ...c, remindersSent: (c.remindersSent ?? 0) + 1 } : c));
     await this.repo.saveCustomers(customers.filter((c) => c.customerId === customerId));
     this.set({ customers });
@@ -220,20 +257,36 @@ export class Store {
   signUp(email: string, password: string) { return this.auth().signUp(email, password); }
   confirmSignUp(email: string, code: string) { return this.auth().confirm(email, code); }
 
-  async signIn(email: string, password: string): Promise<void> {
+  signIn(email: string, password: string): Promise<void> {
+    return this.serial(() => this.signInNow(email, password));
+  }
+
+  private async signInNow(email: string, password: string): Promise<void> {
     const tokens = await this.auth().signIn(email, password);
     const s = this.state;
-    if (s.settings.shopId !== tokens.sub) {
-      if (s.chain.some((r) => r.signature)) {
-        await this.auth().signOut();
-        throw new StoreError('This phone already holds another account\'s signed bills. Reset data before switching accounts.');
-      }
-      // Bills made offline before sign-in are re-chained under the real shop id (none are signed yet).
-      const chain = buildChain(tokens.sub, this.bills());
-      await this.repo.replaceChain(chain);
-      this.set({ chain });
+    const refuse = async (msg: string) => {
+      await this.auth().signOut();
+      throw new StoreError(msg);
+    };
+    if (s.settings.shopId === tokens.sub) {
+      await this.updateSettings({ email: tokens.email });
+      return;
     }
+    if (s.chain.some((r) => r.signature)) {
+      await refuse('This phone already holds another account\'s signed bills. Reset data before switching accounts.');
+    }
+    // Bills made offline before sign-in are re-chained under the real shop id (none are signed yet).
+    const chain = buildChain(tokens.sub, this.bills());
+    // The account may already have a cloud ledger (another phone, or a reinstall). Only continue if
+    // this phone's ledger is that same ledger; otherwise every sync would be rejected as a fork.
+    const { head } = await this.api().sync({});
+    if (head && chain[head.seq]?.entryHash !== head.entryHash) {
+      await refuse(`This account already has a cloud ledger with ${head.seq + 1} bills from another phone. Use a new account for this phone's data.`);
+    }
+    // settings first: if the app dies before the chain is rewritten, Store.create() re-chains on start
     await this.updateSettings({ shopId: tokens.sub, email: tokens.email });
+    await this.repo.replaceChain(chain);
+    this.set({ chain });
   }
 
   async signOut(): Promise<void> {
@@ -290,6 +343,7 @@ export class Store {
   }
 
   async resetAll(): Promise<void> {
+    if (this.cloudConfig()) await this.auth().signOut().catch(() => undefined); // tokens must not outlive the data
     await this.repo.reset();
     const settings = { ...DEFAULT_SETTINGS, lang: this.state.settings.lang, cloud: this.state.settings.cloud };
     this.set({ items: [], customers: [], udhaar: [], chain: [], settings, cloudInsights: null });

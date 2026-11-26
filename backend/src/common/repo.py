@@ -51,7 +51,7 @@ def ledger_head(tbl, shop: str) -> dict | None:
     if not items:
         return None
     rec = json.loads(items[0]["data"])
-    return {"seq": rec["entry"]["seq"], "entryHash": rec["entryHash"]}
+    return {"seq": rec["entry"]["seq"], "entryHash": rec["entryHash"], "timestamp": rec["entry"]["timestamp"]}
 
 
 def ledger_range(tbl, shop: str, first: int, last: int) -> list[dict]:
@@ -77,19 +77,33 @@ class ChainConflict(Exception):
 
 
 def append_ledger(tbl, shop: str, signed: list[dict], now_ms: int) -> None:
-    """Write ledger entries + bills atomically, refusing to overwrite any seq."""
+    """Write ledger entries + bills, refusing to overwrite any seq or bill id.
+
+    Each entry is 3 conditional puts (ledger seq, bill copy, bill-id marker);
+    entries are written in transactions of up to 33 entries, in seq order, so a
+    failure can only ever leave a valid *prefix* of the batch stored.
+    """
     client = tbl.meta.client
-    ops = []
+    per_entry = []
     for rec in signed:
-        ops.append({"Put": {"TableName": tbl.name, "Item": {"pk": pk(shop), "sk": ledger_sk(rec["entry"]["seq"]),
-                                                             "data": _dump(rec), "updatedAt": now_ms},
-                            "ConditionExpression": "attribute_not_exists(sk)"}})
-        ops.append({"Put": {"TableName": tbl.name, "Item": {"pk": pk(shop), "sk": bill_sk(rec["bill"]),
-                                                             "data": _dump(rec["bill"]), "updatedAt": now_ms}}})
+        stored = {**rec, "signedAt": now_ms}
+        per_entry.append([
+            {"Put": {"TableName": tbl.name, "Item": {"pk": pk(shop), "sk": ledger_sk(rec["entry"]["seq"]),
+                                                      "data": _dump(stored), "updatedAt": now_ms},
+                     "ConditionExpression": "attribute_not_exists(sk)"}},
+            {"Put": {"TableName": tbl.name, "Item": {"pk": pk(shop), "sk": bill_sk(rec["bill"]),
+                                                      "data": _dump(rec["bill"]), "updatedAt": now_ms},
+                     "ConditionExpression": "attribute_not_exists(sk)"}},
+            {"Put": {"TableName": tbl.name, "Item": {"pk": pk(shop), "sk": f"BILLID#{rec['bill']['billId']}",
+                                                      "seq": rec["entry"]["seq"], "updatedAt": now_ms},
+                     "ConditionExpression": "attribute_not_exists(sk)"}},
+        ])
+    step = TRANSACT_LIMIT // 3
     # tbl.meta.client is the resource's client: it serialises Python values itself.
-    for i in range(0, len(ops), TRANSACT_LIMIT):
+    for i in range(0, len(per_entry), step):
+        ops = [op for group in per_entry[i : i + step] for op in group]
         try:
-            client.transact_write_items(TransactItems=ops[i : i + TRANSACT_LIMIT])
+            client.transact_write_items(TransactItems=ops)
         except ClientError as e:
             reasons = [r.get("Code") for r in e.response.get("CancellationReasons", [])]
             if e.response["Error"]["Code"] == "TransactionCanceledException" and "ConditionalCheckFailed" in reasons:
@@ -141,3 +155,46 @@ def claim_refresh_slot(tbl, shop: str, now_ms: int, min_interval_ms: int) -> boo
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return False
         raise
+
+
+QUOTA_TTL_SECONDS = 2 * 86_400
+
+
+def consume_quota(tbl, shop: str, kind: str, limit: int, now_ms: int) -> bool:
+    """Per-shop daily quota for paid AI calls (Bedrock, Textract) and syncs.
+    Atomic conditional counter; rows expire via the table's TTL attribute."""
+    day = now_ms // 86_400_000
+    try:
+        tbl.update_item(
+            Key={"pk": pk(shop), "sk": f"QUOTA#{kind}#{day}"},
+            UpdateExpression="ADD #n :one SET #ttl = :ttl",
+            ConditionExpression="attribute_not_exists(#n) OR #n < :limit",
+            ExpressionAttributeNames={"#n": "n", "#ttl": "ttl"},
+            ExpressionAttributeValues={":one": 1, ":limit": limit, ":ttl": now_ms // 1000 + QUOTA_TTL_SECONDS},
+        )
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
+
+
+def claim_once(tbl, shop: str, marker: str, now_ms: int) -> bool:
+    """True the first time `marker` is claimed for this shop (e.g. one Textract run per upload)."""
+    try:
+        tbl.put_item(Item={"pk": pk(shop), "sk": marker, "at": now_ms, "ttl": now_ms // 1000 + 40 * 86_400},
+                     ConditionExpression="attribute_not_exists(sk)")
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
+
+
+def release(tbl, shop: str, marker: str) -> None:
+    tbl.delete_item(Key={"pk": pk(shop), "sk": marker})
+
+
+def get_profile(tbl, shop: str) -> dict:
+    item = tbl.get_item(Key={"pk": pk(shop), "sk": "PROFILE"}).get("Item")
+    return json.loads(item["data"]) if item else {}

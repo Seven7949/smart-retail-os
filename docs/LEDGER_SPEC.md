@@ -63,3 +63,22 @@ The first failure wins:
 | `HASH_MISMATCH` | entryHash does not match recomputed hash (entry edited) |
 | `BAD_SIGNATURE` | signature invalid (forged by someone without the key) |
 | `SHOP_MISMATCH` | entry belongs to another shop |
+
+## Sign-time rules (enforced by the Rust signer)
+
+Besides the hash links, a batch is signed only if, for every entry:
+
+- the bill passes validation (IDs, positive quantities, line-total rule, udhaar needs a customer);
+- `createdAt ≤ server time + 10 minutes` (no future-dated bills);
+- `createdAt ≥` the previous entry's timestamp, including the stored chain head (no going back in time). The
+  app clamps new bills to the last bill's time, so a phone whose clock moved backwards cannot block sync;
+- `billId` is unique within the batch, and the backend also enforces uniqueness across the whole chain with a
+  conditional `BILLID#<id>` marker.
+
+The backend stores `signedAt` (server time) next to each signed entry and writes entries 33 at a time per
+DynamoDB transaction, so a failure leaves only a valid prefix.
+
+**Known limitation (v1):** the signature covers `entryHash` only, so it proves the bill has not changed *since
+it was signed*, not that it was really created on `createdAt`. A shop could upload invented history on its first
+sync. v2 would sign `sha256(entryHash ‖ signedAt ‖ keyId)` so verifiers can also see when each bill reached the
+server, and rotate keys by `keyId`.

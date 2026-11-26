@@ -40,7 +40,7 @@ async fn function(event: LambdaEvent<Value>) -> Result<Value, Error> {
             );
         }
     };
-    let response = handler::handle(signer, request);
+    let response = handler::handle(signer, request, handler::now_ms());
     Ok(serde_json::to_value(response)?)
 }
 

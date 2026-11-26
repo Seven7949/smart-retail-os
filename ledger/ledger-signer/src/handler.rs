@@ -51,13 +51,13 @@ pub enum Response {
     },
 }
 
-pub fn handle(signer: &Signer, req: Request) -> Response {
+pub fn handle(signer: &Signer, req: Request, now_ms: i64) -> Response {
     match req {
         Request::Sign {
             shop_id,
             head,
             items,
-        } => match validate_and_sign(signer, &shop_id, head.as_ref(), &items) {
+        } => match validate_and_sign(signer, &shop_id, head.as_ref(), &items, now_ms) {
             Ok(signatures) => Response::Signed {
                 ok: true,
                 signatures,
@@ -88,6 +88,14 @@ pub fn handle(signer: &Signer, req: Request) -> Response {
             public_key: signer.public_key_base64(),
         },
     }
+}
+
+/// Current wall-clock time in epoch milliseconds.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -122,7 +130,7 @@ mod tests {
 
     fn run(v: &Value, req: Value) -> Value {
         let req: Request = serde_json::from_value(req).unwrap();
-        serde_json::to_value(handle(&signer(v), req)).unwrap()
+        serde_json::to_value(handle(&signer(v), req, 1_800_000_000_000)).unwrap()
     }
 
     #[test]

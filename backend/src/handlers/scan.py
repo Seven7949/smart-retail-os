@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import os
 import re
+import time
 import uuid
 
 import boto3
 
+from common import repo
 from common.http import ApiError, api, json_body, shop_id
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -21,6 +23,7 @@ CONTENT_TYPES = {"image/jpeg": "jpg", "image/png": "png"}
 KEY_RE = re.compile(r"^scans/[A-Za-z0-9_-]{1,64}/[0-9a-f-]{36}\.(jpg|png)$")
 MONEY_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 MAX_LINES = 200
+DAILY_LIMIT = 40  # Textract pages per shop per day (cost guard)
 
 
 def parse_money_paise(text: str | None) -> int | None:
@@ -103,6 +106,17 @@ def handler(event, _ctx):
         key = body.get("key")
         if not isinstance(key, str) or not KEY_RE.match(key) or not key.startswith(f"scans/{shop}/"):
             raise ApiError(403, "FORBIDDEN_KEY", "you can only parse your own uploads")
-        resp = boto3.client("textract").analyze_expense(Document={"S3Object": {"Bucket": bucket, "Name": key}})
+        tbl, now = repo.table(), int(time.time() * 1000)
+        marker = f"SCAN#{key.rsplit('/', 1)[-1]}"
+        if not repo.claim_once(tbl, shop, marker, now):
+            raise ApiError(409, "ALREADY_PARSED", "This photo was already read. Take a new photo to scan again.")
+        if not repo.consume_quota(tbl, shop, "scan", DAILY_LIMIT, now):
+            repo.release(tbl, shop, marker)
+            raise ApiError(429, "DAILY_LIMIT", "Daily invoice scan limit reached. Try again tomorrow.")
+        try:
+            resp = boto3.client("textract").analyze_expense(Document={"S3Object": {"Bucket": bucket, "Name": key}})
+        except Exception:
+            repo.release(tbl, shop, marker)  # allow a retry if Textract itself failed
+            raise
         return 200, parse_expense(resp)
     raise ApiError(404, "NOT_FOUND", "unknown route")

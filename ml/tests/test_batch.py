@@ -81,6 +81,14 @@ def test_compute_insights_full(long_bills):
     assert "Reorder today" in digest(out, "Sharma Kirana")
 
 
+def test_unknown_skus_are_ignored_and_digest_is_sanitised(long_bills):
+    items = {k: v for k, v in list(catalog_items().items())[:5]}
+    panel = bills_to_panel(long_bills[:200], items, pd.Timestamp("2026-11-15").to_pydatetime())
+    assert set(panel["sku"]) <= set(items)
+    text = digest({"reorder": [{"name": "Evil\x07 http://phish.example", "orderUnits": 1, "reason": "x"}]}, "Shop\nName")
+    assert "://" not in text and "\x07" not in text and "ShopName" in text
+
+
 def test_short_history_uses_fallback():
     bills = make_bills(20)
     panel = bills_to_panel(bills, catalog_items(), pd.Timestamp("2026-11-15").to_pydatetime())

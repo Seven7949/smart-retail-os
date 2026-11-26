@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Switch, Text, View } from 'react-native';
-import { validateConfig } from '../api/config';
+import { buildTimeConfig, validateConfig } from '../api/config';
 import { useAppState, useStoreInstance, useT } from '../data/hooks';
 import { Button, Card, Chip, Field, Screen, Tap, styles } from '../ui/components';
 import { colors, space, type } from '../ui/theme';
@@ -41,12 +41,23 @@ export default function SettingsScreen() {
     await store.updateSettings({ shopName: shopName.trim(), upiId: upiId.trim() });
   }, t('save') + ' ✓');
 
-  const saveCfg = () => run(async () => {
+  const applyCfg = () => run(async () => {
     const v = validateConfig(cfg);
     if (!v.ok) throw new Error(v.error);
     await store.updateSettings({ cloud: v.config });
     setShowCfg(false);
   }, 'Cloud configured ✓');
+
+  // Your login token and shop data go to this address: warn before pointing the app somewhere new.
+  const saveCfg = () => {
+    const builtIn = buildTimeConfig().apiUrl;
+    const host = (u?: string) => { try { return u ? new URL(u).host : ''; } catch { return ''; } };
+    if (builtIn && host(builtIn) !== host(cfg.apiUrl)) {
+      Alert.alert('Change cloud server?', `Your sign-in and shop data will be sent to ${host(cfg.apiUrl) || cfg.apiUrl}. Only do this if you deployed that server yourself.`, [
+        { text: t('cancel'), style: 'cancel' }, { text: 'Use it', style: 'destructive', onPress: applyCfg },
+      ]);
+    } else applyCfg();
+  };
 
   return (
     <Screen title={t('settings')} right={<Tap onPress={() => router.back()} accessibilityLabel="close"><Ionicons name="close" size={28} color={colors.ink} /></Tap>}>

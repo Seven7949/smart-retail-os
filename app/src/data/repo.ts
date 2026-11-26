@@ -19,6 +19,8 @@ export interface Repo {
   saveCustomers(customers: readonly Customer[]): Promise<void>;
   saveUdhaar(txns: readonly UdhaarTxn[]): Promise<void>;
   appendChain(records: readonly ChainRecord[]): Promise<void>;
+  /** A sale: ledger entry + stock changes + optional udhaar credit, all or nothing. */
+  commitBill(record: ChainRecord, items: readonly Item[], udhaar: readonly UdhaarTxn[]): Promise<void>;
   replaceChain(records: readonly ChainRecord[]): Promise<void>;
   setSignatures(sigs: readonly { seq: number; signature: string }[]): Promise<void>;
   setKV(key: string, value: string): Promise<void>;
@@ -102,6 +104,14 @@ export class SqliteRepo implements Repo {
     return this.exclusive(async () => {
       if (records.length) await this.db.withTransactionAsync(() => this.insertChain(records));
     });
+  }
+
+  commitBill(record: ChainRecord, items: readonly Item[], udhaar: readonly UdhaarTxn[]) {
+    return this.exclusive(() => this.db.withTransactionAsync(async () => {
+      await this.insertChain([record]);
+      for (const i of items) await this.db.runAsync('INSERT OR REPLACE INTO items (sku, data) VALUES (?, ?)', i.sku, JSON.stringify(i));
+      for (const t of udhaar) await this.db.runAsync('INSERT OR REPLACE INTO udhaar (id, data) VALUES (?, ?)', t.id, JSON.stringify(t));
+    }));
   }
 
   /** One transaction: a crash can never leave the shop with an empty ledger. */

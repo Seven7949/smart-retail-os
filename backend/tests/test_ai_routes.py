@@ -111,7 +111,7 @@ def bedrock_returning(lines):
 def test_voice_parse_validates_model_output(aws, monkeypatch):
     fake = bedrock_returning([{"sku": "sugar-1", "qty": 2}, {"sku": "maggi-70", "qty": 3},
                               {"sku": "rm -rf", "qty": 1}, {"sku": "sugar-1", "qty": -4},
-                              {"sku": "maggi-70", "qty": True}, "junk"])
+                              {"sku": "maggi-70", "qty": True}, {"sku": "maggi-70", "qty": 0.0001}, "junk"])
     monkeypatch.setattr(voice_h.boto3, "client", lambda name: fake)
     status, body = call(voice_h.handler, event("POST /voice/parse", {"text": "do kilo cheeni teen maggi", "catalog": CATALOG}))
     assert status == 200

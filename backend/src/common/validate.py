@@ -11,9 +11,9 @@ from typing import Any
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 MAX_SAFE = 2**53 - 1
-MAX_ITEMS = 5000
-MAX_CUSTOMERS = 5000
-MAX_UDHAAR = 5000
+MAX_ITEMS = 2000
+MAX_CUSTOMERS = 2000
+MAX_UDHAAR = 2000
 MAX_CHAIN = 500
 UNITS = {"pcs", "kg", "l"}
 PAYMENT_MODES = {"cash", "upi", "udhaar"}

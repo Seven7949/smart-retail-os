@@ -18,7 +18,13 @@ pub enum FailureCode {
     InvalidBill,
     BatchTooLarge,
     BadPublicKey,
+    FutureTimestamp,
+    TimestampRegression,
+    DuplicateBill,
 }
+
+/// Bills may not claim to be from the future (device clock tolerance).
+pub const MAX_CLOCK_SKEW_MS: i64 = 10 * 60 * 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Failure {
@@ -42,6 +48,9 @@ pub struct ChainItem {
 pub struct ChainHead {
     pub seq: i64,
     pub entry_hash: String,
+    /// Timestamp of the head entry; new entries may not go back in time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +131,7 @@ pub fn validate_and_sign(
     shop_id: &str,
     head: Option<&ChainHead>,
     items: &[ChainItem],
+    now_ms: i64,
 ) -> Result<Vec<SignedHash>, Failure> {
     let fail = |seq, code| Failure { seq, code };
     if !is_valid_id(shop_id) {
@@ -135,10 +145,22 @@ pub fn validate_and_sign(
         Some(h) => (h.seq + 1, h.entry_hash.clone()),
     };
     let mut out = Vec::with_capacity(items.len());
+    let mut last_ts = head.and_then(|h| h.timestamp).unwrap_or(i64::MIN);
+    let mut seen = std::collections::HashSet::with_capacity(items.len());
     for item in items {
         item.bill
             .validate()
             .map_err(|_| fail(item.entry.seq, FailureCode::InvalidBill))?;
+        if item.bill.created_at > now_ms.saturating_add(MAX_CLOCK_SKEW_MS) {
+            return Err(fail(item.entry.seq, FailureCode::FutureTimestamp));
+        }
+        if item.bill.created_at < last_ts {
+            return Err(fail(item.entry.seq, FailureCode::TimestampRegression));
+        }
+        if !seen.insert(item.bill.bill_id.as_str()) {
+            return Err(fail(item.entry.seq, FailureCode::DuplicateBill));
+        }
+        last_ts = item.bill.created_at;
         check_link(shop_id, seq, &prev, item).map_err(|code| fail(item.entry.seq, code))?;
         let signature = signer
             .sign_entry_hash(&item.entry_hash)
@@ -220,10 +242,14 @@ pub fn verify_chain_from(
         }
         prev = item.entry_hash.clone();
     }
-    let head = items.last().map(|it| ChainHead {
-        seq: it.entry.seq,
-        entry_hash: it.entry_hash.clone(),
-    });
+    let head = items
+        .last()
+        .map(|it| ChainHead {
+            seq: it.entry.seq,
+            entry_hash: it.entry_hash.clone(),
+            timestamp: Some(it.entry.timestamp),
+        })
+        .or_else(|| start.cloned());
     report(items.len(), None, head)
 }
 
@@ -242,6 +268,7 @@ mod tests {
     use crate::model::{LineItem, PaymentMode};
 
     const SHOP: &str = "shop_1";
+    const NOW: i64 = 1_767_225_600_000;
     const SECRET: &str = "unit-test-secret-unit-test-secret";
 
     fn bill(n: i64) -> Bill {
@@ -268,6 +295,7 @@ mod tests {
                 head = Some(ChainHead {
                     seq: entry.seq,
                     entry_hash: entry_hash.clone(),
+                    timestamp: Some(entry.timestamp),
                 });
                 ChainItem {
                     bill: b,
@@ -283,7 +311,7 @@ mod tests {
     fn sign_new_chain_then_verify_with_key() {
         let signer = Signer::from_secret(SECRET).unwrap();
         let mut items = chain(5, None);
-        let sigs = validate_and_sign(&signer, SHOP, None, &items).unwrap();
+        let sigs = validate_and_sign(&signer, SHOP, None, &items, NOW).unwrap();
         assert_eq!(sigs.len(), 5);
         for (it, s) in items.iter_mut().zip(&sigs) {
             it.signature = Some(s.signature.clone());
@@ -300,21 +328,51 @@ mod tests {
         let head = ChainHead {
             seq: 1,
             entry_hash: first[1].entry_hash.clone(),
+            timestamp: None,
         };
         let next = chain(2, Some(head.clone()));
-        assert!(validate_and_sign(&signer, SHOP, Some(&head), &next).is_ok());
+        assert!(validate_and_sign(&signer, SHOP, Some(&head), &next, NOW).is_ok());
 
         // Fork attempt: same batch against a different head.
         let wrong = ChainHead {
             seq: 1,
             entry_hash: first[0].entry_hash.clone(),
+            timestamp: None,
         };
-        let err = validate_and_sign(&signer, SHOP, Some(&wrong), &next).unwrap_err();
+        let err = validate_and_sign(&signer, SHOP, Some(&wrong), &next, NOW).unwrap_err();
         assert_eq!(err.code, FailureCode::PrevMismatch);
 
         // Replay: re-sending an already-accepted batch.
-        let err = validate_and_sign(&signer, SHOP, Some(&head), &first).unwrap_err();
+        let err = validate_and_sign(&signer, SHOP, Some(&head), &first, NOW).unwrap_err();
         assert_eq!(err.code, FailureCode::SeqGap);
+    }
+
+    #[test]
+    fn future_backdated_and_duplicate_bills_are_rejected() {
+        let signer = Signer::from_secret(SECRET).unwrap();
+        // a bill claiming to be from tomorrow
+        let items = chain(1, None);
+        let err =
+            validate_and_sign(&signer, SHOP, None, &items, -MAX_CLOCK_SKEW_MS - 1).unwrap_err();
+        assert_eq!(err.code, FailureCode::FutureTimestamp);
+        // a continuation that goes back in time relative to the stored head
+        let head = ChainHead {
+            seq: items[0].entry.seq,
+            entry_hash: items[0].entry_hash.clone(),
+            timestamp: Some(NOW),
+        };
+        let next = chain(1, Some(head.clone()));
+        let err = validate_and_sign(&signer, SHOP, Some(&head), &next, NOW).unwrap_err();
+        assert_eq!(err.code, FailureCode::TimestampRegression);
+        // the same bill id twice in one batch
+        let mut dup = chain(2, None);
+        dup[1].bill.bill_id = dup[0].bill.bill_id.clone();
+        dup[1].entry.bill_id = dup[0].bill.bill_id.clone();
+        dup[1].entry.payload_hash = payload_hash(&dup[1].bill).unwrap();
+        dup[1].entry.prev_hash = dup[0].entry_hash.clone();
+        dup[1].entry_hash = entry_hash(&dup[1].entry).unwrap();
+        let err = validate_and_sign(&signer, SHOP, None, &dup, NOW).unwrap_err();
+        assert_eq!(err.code, FailureCode::DuplicateBill);
     }
 
     #[test]
@@ -322,7 +380,7 @@ mod tests {
         let signer = Signer::from_secret(SECRET).unwrap();
         let mut items = chain(1, None);
         items[0].bill.total_paise = 1;
-        let err = validate_and_sign(&signer, SHOP, None, &items).unwrap_err();
+        let err = validate_and_sign(&signer, SHOP, None, &items, NOW).unwrap_err();
         assert_eq!(err.code, FailureCode::InvalidBill);
     }
 
@@ -332,13 +390,13 @@ mod tests {
         let items = chain(1, None);
         let many: Vec<_> = std::iter::repeat_n(items[0].clone(), MAX_BATCH + 1).collect();
         assert_eq!(
-            validate_and_sign(&signer, SHOP, None, &many)
+            validate_and_sign(&signer, SHOP, None, &many, NOW)
                 .unwrap_err()
                 .code,
             FailureCode::BatchTooLarge
         );
         assert_eq!(
-            validate_and_sign(&signer, "bad shop!", None, &items)
+            validate_and_sign(&signer, "bad shop!", None, &items, NOW)
                 .unwrap_err()
                 .code,
             FailureCode::ShopMismatch

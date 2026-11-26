@@ -20,6 +20,7 @@ from sros_ml.udhaar_features import features_for
 from sros_ml.udhaar_risk import score
 
 MIN_HISTORY_DAYS_FOR_ML = 56
+MAX_SKUS = 1500  # bounds memory/time per shop so one shop cannot stall the nightly run
 FORECAST_DAYS = 14
 IST = timezone(timedelta(hours=5, minutes=30))
 DEFAULT_ECON = {"leadTimeDays": 2, "packSize": 1, "shelfLifeDays": 180}
@@ -31,9 +32,12 @@ def _udhaar_model() -> dict:
 
 def bills_to_panel(bills: list[dict], items: dict[str, dict], end: datetime) -> pd.DataFrame:
     rows = []
+    known = set(list(items)[:MAX_SKUS]) if items else None
     for b in bills:
         day = datetime.fromtimestamp(b["createdAt"] / 1000, IST).date()
         for li in b["items"]:
+            if known is not None and li["sku"] not in known:
+                continue  # only forecast SKUs the shop actually stocks
             rows.append((pd.Timestamp(day), li["sku"], li["qtyMilli"] / 1000, li["unitPricePaise"]))
     if not rows:
         return pd.DataFrame(columns=["date", "sku", "units", "price_paise", "promo"])
@@ -207,11 +211,17 @@ def compute_insights(bills: list[dict], items: dict[str, dict], customers: dict[
     return result
 
 
+def _clean(text: str, limit: int = 60) -> str:
+    """Shop-controlled text goes into an email: strip control chars and links."""
+    text = "".join(ch for ch in str(text) if ch.isprintable())
+    return text.replace("://", " ")[:limit]
+
+
 def digest(insights: dict, shop_name: str) -> str:
-    lines = [f"Dukaan AI daily digest: {shop_name}", ""]
+    lines = [f"Dukaan AI daily digest: {_clean(shop_name)}", ""]
     if insights.get("reorder"):
         lines.append("Reorder today:")
-        lines += [f"  • {r['name']}: {r['orderUnits']} units ({r['reason']})" for r in insights["reorder"][:5]]
+        lines += [f"  • {_clean(r['name'])}: {r['orderUnits']} units ({r['reason']})" for r in insights["reorder"][:5]]
     high = [u for u in insights.get("udhaar", []) if u["band"] == "high"]
     if high:
         total = sum(u["outstandingPaise"] for u in high) / 100

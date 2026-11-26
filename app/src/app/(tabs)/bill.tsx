@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, ScrollView, Share, Text, TextInput, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -49,7 +49,11 @@ export default function BillScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<ChainRecord | null>(null);
 
-  useEffect(() => { if (params.voice) setVoiceOpen(true); }, [params.voice]);
+  useEffect(() => {
+    if (!params.voice) return;
+    setVoiceOpen(true);
+    router.setParams({ voice: undefined }); // so "Voice bill" on Home works every time
+  }, [params.voice]);
 
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
   const visible = useMemo(() => {
@@ -193,7 +197,7 @@ export default function BillScreen() {
 
       <VoiceSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)}
         onAdd={(lines) => {
-          setCart((c) => lines.reduce((acc, l) => addToCart(acc, l.item, l.qtyMilli), c));
+          setCart((c) => lines.filter((l) => l.qtyMilli > 0).reduce((acc, l) => addToCart(acc, l.item, l.qtyMilli), c));
           if (lines.length) setTimeout(() => setReviewOpen(true), 350); // let the voice sheet close first
         }} />
     </SafeAreaView>

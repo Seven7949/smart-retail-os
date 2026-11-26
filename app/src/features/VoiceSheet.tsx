@@ -75,7 +75,7 @@ export function VoiceSheet({ visible, onClose, onAdd }: { visible: boolean; onCl
     try {
       const res = await store.api().voiceParse(text, items);
       const bySku = new Map(items.map((i) => [i.sku, i]));
-      setCloudLines(res.lines.filter((l) => bySku.has(l.sku)).map((l) => ({ item: bySku.get(l.sku)!, qtyMilli: l.qtyMilli, confidence: 0.9, heard: 'AI' })));
+      setCloudLines(res.lines.filter((l) => bySku.has(l.sku) && l.qtyMilli > 0).map((l) => ({ item: bySku.get(l.sku)!, qtyMilli: l.qtyMilli, confidence: 0.9, heard: 'AI' })));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'AI is unavailable', 'danger');
     } finally {

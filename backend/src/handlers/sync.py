@@ -6,10 +6,16 @@ different entry at an existing seq is a fork and is rejected with 409.
 """
 from __future__ import annotations
 
+import json
+import os
 import time
 
+import boto3
+
 from common import repo, signer, validate
-from common.http import ApiError, api, json_body, shop_id
+from common.http import ApiError, api, claim, json_body, shop_id
+
+DAILY_SYNC_LIMIT = 500
 
 
 def _now() -> int:
@@ -54,14 +60,30 @@ def process_chain(tbl, shop: str, chain: list[dict], now: int) -> tuple[list[dic
     return accepted, head
 
 
+def subscribe_digest(shop: str, email: str | None, profile: dict) -> dict:
+    """Subscribe the shop owner's *own verified email* (from the JWT) to the
+    digest topic, filtered so they only ever receive their own shop's digest."""
+    topic = os.environ.get("DIGEST_TOPIC_ARN")
+    if not topic or not email or not profile.get("digestOptIn") or profile.get("digestSubscribed"):
+        return profile
+    boto3.client("sns").subscribe(TopicArn=topic, Protocol="email", Endpoint=email,
+                                  Attributes={"FilterPolicy": json.dumps({"shopId": [shop]})})
+    return {**profile, "digestSubscribed": True}
+
+
 @api
 def handler(event, _ctx):
     shop = shop_id(event)
     req = validate.sync_request(json_body(event))
     now = _now()
     tbl = repo.table()
+    if not repo.consume_quota(tbl, shop, "sync", DAILY_SYNC_LIMIT, now):
+        raise ApiError(429, "DAILY_LIMIT", "Too many syncs today; your data is safe on the phone.")
     if req["profile"]:
-        repo.put_profile(tbl, shop, req["profile"], now)
+        stored = repo.get_profile(tbl, shop)
+        profile = {**req["profile"], "digestSubscribed": bool(stored.get("digestSubscribed"))}
+        profile = subscribe_digest(shop, claim(event, "email"), profile)
+        repo.put_profile(tbl, shop, profile, now)
     else:
         repo.ensure_profile(tbl, shop, now)
     accepted, head = process_chain(tbl, shop, req["chain"], now)

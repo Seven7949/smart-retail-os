@@ -54,6 +54,13 @@ describe('security', () => {
     expect(policies.every((p) => JSON.stringify(p).includes('aws:SecureTransport'))).toBe(true);
   });
 
+  test('digest topic has no catch-all subscriber; sync may only subscribe to it', () => {
+    t.resourceCountIs('AWS::SNS::Subscription', 0);
+    const subscribe = allStatements().filter((s: any) => s.Action === 'sns:Subscribe');
+    expect(subscribe).toHaveLength(1);
+    t.hasResourceProperties('AWS::DynamoDB::GlobalTable', { TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true } });
+  });
+
   test('only the Rust signer can read the signing secret', () => {
     const readers = Object.entries(t.findResources('AWS::IAM::Policy')).filter(([, p]: any) =>
       p.Properties.PolicyDocument.Statement.some((s: any) =>

@@ -45,6 +45,15 @@ def shop_id(event: dict) -> str:
     return sub
 
 
+def claim(event: dict, name: str) -> str | None:
+    """Another verified JWT claim (e.g. email), or None."""
+    try:
+        value = event["requestContext"]["authorizer"]["jwt"]["claims"].get(name)
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return value if isinstance(value, str) else None
+
+
 def json_body(event: dict) -> dict:
     raw = event.get("body") or ""
     if event.get("isBase64Encoded"):
