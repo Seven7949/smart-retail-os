@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NUL
 `;
 
 export class SqliteRepo implements Repo {
+  /** Serialises all access: expo-sqlite transactions are not exclusive, so two
+   * overlapping writes (e.g. a bill saved during a sync) would nest BEGINs. */
+  private queue: Promise<unknown> = Promise.resolve();
+
   private constructor(private readonly db: SqlDb) {}
 
   static async open(db: SqlDb): Promise<SqliteRepo> {
@@ -50,25 +54,35 @@ export class SqliteRepo implements Repo {
     return new SqliteRepo(db);
   }
 
-  async load(): Promise<Snapshot> {
-    const rows = <T,>(sql: string) => this.db.getAllAsync<T>(sql);
-    const items = (await rows<{ data: string }>('SELECT data FROM items')).map((r) => JSON.parse(r.data) as Item);
-    const customers = (await rows<{ data: string }>('SELECT data FROM customers')).map((r) => JSON.parse(r.data) as Customer);
-    const udhaar = (await rows<{ data: string }>('SELECT data FROM udhaar')).map((r) => JSON.parse(r.data) as UdhaarTxn)
-      .sort((a, b) => a.ts - b.ts);
-    const chain = (await rows<{ data: string; signature: string | null }>('SELECT data, signature FROM ledger ORDER BY seq'))
-      .map((r) => ({ ...(JSON.parse(r.data) as Omit<ChainRecord, 'signature'>), signature: r.signature }));
-    const kv: Record<string, string> = {};
-    for (const r of await rows<{ key: string; value: string }>('SELECT key, value FROM kv')) kv[r.key] = r.value;
-    return { items, customers, udhaar, chain, kv };
+  private exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn, fn);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
-  private async upsertMany(table: 'items' | 'customers' | 'udhaar', keyCol: string, rows: readonly [string, unknown][]) {
-    if (!rows.length) return;
-    await this.db.withTransactionAsync(async () => {
-      for (const [k, v] of rows) {
-        await this.db.runAsync(`INSERT OR REPLACE INTO ${table} (${keyCol}, data) VALUES (?, ?)`, k, JSON.stringify(v));
-      }
+  load(): Promise<Snapshot> {
+    return this.exclusive(async () => {
+      const rows = <T,>(sql: string) => this.db.getAllAsync<T>(sql);
+      const items = (await rows<{ data: string }>('SELECT data FROM items')).map((r) => JSON.parse(r.data) as Item);
+      const customers = (await rows<{ data: string }>('SELECT data FROM customers')).map((r) => JSON.parse(r.data) as Customer);
+      const udhaar = (await rows<{ data: string }>('SELECT data FROM udhaar')).map((r) => JSON.parse(r.data) as UdhaarTxn)
+        .sort((a, b) => a.ts - b.ts);
+      const chain = (await rows<{ data: string; signature: string | null }>('SELECT data, signature FROM ledger ORDER BY seq'))
+        .map((r) => ({ ...(JSON.parse(r.data) as Omit<ChainRecord, 'signature'>), signature: r.signature }));
+      const kv: Record<string, string> = {};
+      for (const r of await rows<{ key: string; value: string }>('SELECT key, value FROM kv')) kv[r.key] = r.value;
+      return { items, customers, udhaar, chain, kv };
+    });
+  }
+
+  private upsertMany(table: 'items' | 'customers' | 'udhaar', keyCol: string, rows: readonly [string, unknown][]) {
+    return this.exclusive(async () => {
+      if (!rows.length) return;
+      await this.db.withTransactionAsync(async () => {
+        for (const [k, v] of rows) {
+          await this.db.runAsync(`INSERT OR REPLACE INTO ${table} (${keyCol}, data) VALUES (?, ?)`, k, JSON.stringify(v));
+        }
+      });
     });
   }
 
@@ -76,35 +90,41 @@ export class SqliteRepo implements Repo {
   saveCustomers(cs: readonly Customer[]) { return this.upsertMany('customers', 'id', cs.map((c) => [c.customerId, c])); }
   saveUdhaar(ts: readonly UdhaarTxn[]) { return this.upsertMany('udhaar', 'id', ts.map((t) => [t.id, t])); }
 
-  async appendChain(records: readonly ChainRecord[]) {
-    if (!records.length) return;
-    await this.db.withTransactionAsync(async () => {
-      for (const r of records) {
-        // plain INSERT: a duplicate seq or bill id fails loudly instead of overwriting history
-        await this.db.runAsync('INSERT INTO ledger (seq, bill_id, data, signature) VALUES (?, ?, ?, ?)',
-          r.entry.seq, r.bill.billId, JSON.stringify({ bill: r.bill, entry: r.entry, entryHash: r.entryHash }), r.signature);
-      }
+  private async insertChain(records: readonly ChainRecord[]) {
+    for (const r of records) {
+      // plain INSERT: a duplicate seq or bill id fails loudly instead of overwriting history
+      await this.db.runAsync('INSERT INTO ledger (seq, bill_id, data, signature) VALUES (?, ?, ?, ?)',
+        r.entry.seq, r.bill.billId, JSON.stringify({ bill: r.bill, entry: r.entry, entryHash: r.entryHash }), r.signature);
+    }
+  }
+
+  appendChain(records: readonly ChainRecord[]) {
+    return this.exclusive(async () => {
+      if (records.length) await this.db.withTransactionAsync(() => this.insertChain(records));
     });
   }
 
-  async replaceChain(records: readonly ChainRecord[]) {
-    await this.db.withTransactionAsync(async () => {
+  /** One transaction: a crash can never leave the shop with an empty ledger. */
+  replaceChain(records: readonly ChainRecord[]) {
+    return this.exclusive(() => this.db.withTransactionAsync(async () => {
       await this.db.runAsync('DELETE FROM ledger');
-    });
-    await this.appendChain(records);
+      await this.insertChain(records);
+    }));
   }
 
-  async setSignatures(sigs: readonly { seq: number; signature: string }[]) {
-    await this.db.withTransactionAsync(async () => {
+  setSignatures(sigs: readonly { seq: number; signature: string }[]) {
+    return this.exclusive(() => this.db.withTransactionAsync(async () => {
       for (const s of sigs) await this.db.runAsync('UPDATE ledger SET signature = ? WHERE seq = ?', s.signature, s.seq);
+    }));
+  }
+
+  setKV(key: string, value: string) {
+    return this.exclusive(async () => {
+      await this.db.runAsync('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', key, value);
     });
   }
 
-  async setKV(key: string, value: string) {
-    await this.db.runAsync('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', key, value);
-  }
-
-  async reset() {
-    await this.db.execAsync('DELETE FROM items; DELETE FROM customers; DELETE FROM udhaar; DELETE FROM ledger; DELETE FROM kv;');
+  reset() {
+    return this.exclusive(() => this.db.execAsync('DELETE FROM items; DELETE FROM customers; DELETE FROM udhaar; DELETE FROM ledger; DELETE FROM kv;'));
   }
 }

@@ -151,6 +151,25 @@ describe('cloud flows', () => {
     expect(store.verifyLocal().failure?.code).toBe('BAD_SIGNATURE');
   });
 
+  test('bills and udhaar created during a sync are not lost or wrongly marked synced', async () => {
+    const cloud = fakeCloud();
+    const { store } = await freshStore(cloud.fetchFn);
+    await store.updateSettings({ cloud: CFG });
+    await store.startFresh('x');
+    const c = await store.addCustomer('Ramesh');
+    await store.recordUdhaar(c.customerId, 'credit', 1000, NOW);
+    await store.signIn('a@b.co', 'pw12345678');
+    const syncing = store.sync(NOW);
+    // user keeps working while the request is in flight
+    await store.recordUdhaar(c.customerId, 'credit', 2000, NOW + 1);
+    await store.saveBill(addToCart([], store.getState().items[0]), 'cash', null, NOW + 2);
+    await syncing;
+    const s = store.getState();
+    expect(s.udhaar.map((u) => !!u.synced)).toEqual([true, false]);
+    expect(s.chain).toHaveLength(1);
+    expect(s.chain[0].signature).toBeNull(); // created after the batch was sent
+  });
+
   test('wrong password and unconfigured cloud give friendly errors', async () => {
     const { store } = await freshStore(fakeCloud().fetchFn);
     await expect(store.signIn('a@b.co', 'x')).rejects.toThrow(/not configured/);

@@ -102,7 +102,7 @@ export class RetailStack extends Stack {
     const signer = new lambda.Function(this, 'LedgerSigner', {
       description: 'Rust: validates hash chains and signs bills with Ed25519',
       runtime: lambda.Runtime.PROVIDED_AL2023,
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64, // built natively inside Amazon Linux 2023 by the deploy workflow
       handler: 'bootstrap',
       code: lambda.Code.fromAsset(props.signerAssetPath),
       memorySize: 128,

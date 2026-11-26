@@ -31,15 +31,17 @@ jobs:
         with: { node-version: 22, cache: npm, cache-dependency-path: infra/package-lock.json }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with: { workspaces: ledger }
-      - name: Build Rust signer for Lambda (arm64)
-        working-directory: ledger
+      - name: Build Rust signer for Lambda (inside Amazon Linux 2023 = same glibc as the Lambda runtime)
         run: |
-          pip install cargo-lambda
-          cargo lambda build --release --arm64 -p ledger-signer --bin ledger-signer
-          ls -lh target/lambda/ledger-signer/
+          docker run --rm -v "$PWD/ledger":/src -w /src public.ecr.aws/amazonlinux/amazonlinux:2023 bash -euo pipefail -c '
+            dnf install -y -q gcc gcc-c++ cmake make perl-core tar gzip >/dev/null
+            curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal
+            . "$HOME/.cargo/env"
+            cargo build --release --locked -p ledger-signer --bin ledger-signer
+            mkdir -p target/lambda/ledger-signer
+            cp target/release/ledger-signer target/lambda/ledger-signer/bootstrap
+            chmod 755 target/lambda/ledger-signer/bootstrap'
+          ls -lh ledger/target/lambda/ledger-signer/
       - name: Configure AWS credentials (OIDC role)
         if: ${{ vars.AWS_ROLE_ARN != '' }}
         uses: aws-actions/configure-aws-credentials@v4

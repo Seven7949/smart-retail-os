@@ -93,9 +93,9 @@ describe('security', () => {
 });
 
 describe('architecture', () => {
-  test('signer is a Rust (provided.al2023, arm64) Lambda with the secret ARN', () => {
+  test('signer is a Rust (provided.al2023) Lambda with the secret ARN', () => {
     t.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'provided.al2023', Architectures: ['arm64'], Handler: 'bootstrap',
+      Runtime: 'provided.al2023', Architectures: ['x86_64'], Handler: 'bootstrap',
       Environment: { Variables: Match.objectLike({ LEDGER_SECRET_ARN: Match.anyValue() }) },
     });
   });

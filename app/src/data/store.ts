@@ -247,6 +247,7 @@ export class Store {
     try {
       const s = this.state;
       const pending = s.chain.filter((r) => !r.signature);
+      const sentUdhaar = s.udhaar.filter((u) => !u.synced);
       let signed = 0;
       for (let i = 0; i === 0 || i < pending.length; i += SYNC_BATCH) {
         const batch = pending.slice(i, i + SYNC_BATCH);
@@ -254,19 +255,21 @@ export class Store {
         const res = await api.sync({
           ...(first ? {
             profile: { shopName: s.settings.shopName || 'My shop', digestOptIn: s.settings.digestOptIn },
-            items: s.items, customers: s.customers.map(toCloudCustomer), udhaar: s.udhaar.filter((u) => !u.synced),
+            items: s.items, customers: s.customers.map(toCloudCustomer), udhaar: sentUdhaar,
           } : {}),
           chain: batch.map(chainForSync),
         });
         const sigs = res.accepted.filter((a) => batch.some((b) => b.entry.seq === a.seq && b.entryHash === a.entryHash));
         await this.repo.setSignatures(sigs);
         const bySeq = new Map(sigs.map((a) => [a.seq, a.signature]));
+        // merge into the *current* state: bills saved while we were waiting must not be lost
         this.set({ chain: this.state.chain.map((r) => (bySeq.has(r.entry.seq) ? { ...r, signature: bySeq.get(r.entry.seq)! } : r)) }, false);
         signed += sigs.length;
-        if (first) {
-          const udhaar = this.state.udhaar.map((u) => (u.synced ? u : { ...u, synced: true }));
-          await this.repo.saveUdhaar(udhaar.filter((u, k) => u !== this.state.udhaar[k]));
-          this.set({ udhaar }, false);
+        if (first && sentUdhaar.length) {
+          const sentIds = new Set(sentUdhaar.map((u) => u.id));
+          const marked = sentUdhaar.map((u) => ({ ...u, synced: true }));
+          await this.repo.saveUdhaar(marked);
+          this.set({ udhaar: this.state.udhaar.map((u) => (sentIds.has(u.id) ? { ...u, synced: true } : u)) }, false);
         }
       }
       const publicKey = this.state.settings.publicKey ?? (await api.publicKey()).publicKey;
