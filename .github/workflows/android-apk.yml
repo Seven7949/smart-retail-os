@@ -56,7 +56,13 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> gradle.properties
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
+          set -o pipefail
+          if ! ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64 2>&1 | tee "$RUNNER_TEMP/gradle.log"; then
+            # surface the real error as annotations (readable without signing in to the logs)
+            grep -nE "What went wrong|FAILURE|error:|Error:|Exception|> Could not|> Task .* FAILED" "$RUNNER_TEMP/gradle.log" | head -40 | while IFS= read -r line; do echo "::error::${line:0:900}"; done
+            awk '/What went wrong/{f=1} f{print; n++} n>25{exit}' "$RUNNER_TEMP/gradle.log" | tr '\n' ' ' | cut -c1-3500 | sed 's/^/::error title=Gradle::/'
+            exit 1
+          fi
       - name: Rename APK
         run: |
           mkdir -p dist
